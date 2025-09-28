@@ -133,19 +133,18 @@ def simulate(config, reinvestment_strategy):
         fundo_ac += fundo_mes_total
         
         if m % 12 == 0:
-            # Lógica de Reinvestimento Baseada na Estratégia
             custo_expansao = 0
             if reinvestment_strategy == 'buy':
                 custo_expansao = custo_modulo_atual_owned + cfg_owned['cost_per_land_plot']
             elif reinvestment_strategy == 'rent':
                 custo_expansao = custo_modulo_atual_rented
             elif reinvestment_strategy == 'alternate':
-                if compra_intercalada_counter % 2 == 0: # Compra
+                if compra_intercalada_counter % 2 == 0:
                     custo_expansao = custo_modulo_atual_owned + cfg_owned['cost_per_land_plot']
-                else: # Aluga
+                else:
                     custo_expansao = custo_modulo_atual_rented
             
-            if caixa >= custo_expansao:
+            if custo_expansao > 0 and caixa >= custo_expansao:
                 novos_modulos_comprados = int(caixa // custo_expansao)
                 custo_da_compra = novos_modulos_comprados * custo_expansao
                 caixa -= custo_da_compra
@@ -251,12 +250,13 @@ if st.session_state.active_page == 'Configurações':
         cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em %.")
         
         st.markdown("---")
-        st.markdown("###### Aportes, Retiradas e Fundos (% sobre o lucro mensal)")
-        # ... (Lógica de eventos financeiros permanece a mesma)
-        
+        st.markdown("###### Eventos Financeiros (% sobre o lucro mensal)")
+        # Lógica para Aportes, Retiradas e Fundos...
+        # (código omitido para brevidade)
+
 # PÁGINA DO DASHBOARD
 if st.session_state.active_page == 'Dashboard':
-    st.title("Dashboard Financeiro")
+    st.title("Dashboard Estratégico")
     st.markdown(f"<p class='subhead'>Escolha uma estratégia de reinvestimento para simular</p>", unsafe_allow_html=True)
     
     strat_cols = st.columns(3)
@@ -264,7 +264,7 @@ if st.session_state.active_page == 'Dashboard':
         st.session_state.simulation_df = simulate(st.session_state.config, 'buy')
     if strat_cols[1].button("📈 Simular: Alugar Terreno", use_container_width=True):
         st.session_state.simulation_df = simulate(st.session_state.config, 'rent')
-    if strat_cols[2].button("📈 Simular: Intercalar", use_container_width=True, type="primary"):
+    if strat_cols[2].button("📈 Simular: Intercalar Compra/Aluguel", use_container_width=True, type="primary"):
         st.session_state.simulation_df = simulate(st.session_state.config, 'alternate')
 
     if st.session_state.simulation_df.empty:
@@ -304,6 +304,8 @@ if st.session_state.active_page == 'Dashboard':
                 fig_alug.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), plot_bgcolor='white', paper_bgcolor='white')
                 st.plotly_chart(fig_alug, use_container_width=True)
 
+        st.markdown("<br>", unsafe_allow_html=True)
+
         with st.container(border=True):
             st.subheader("Visão Geral (Distribuição Final)")
             dist_data = {'Valores': [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']], 'Categorias': ['Retiradas', 'Fundo Total', 'Caixa Final']}
@@ -313,8 +315,8 @@ if st.session_state.active_page == 'Dashboard':
 
 # PÁGINA DE PLANILHAS
 if st.session_state.active_page == 'Planilhas':
-    # ... (A página de planilhas permanece a mesma, mas se beneficiará dos novos dados se uma simulação for executada)
+    # ... (A página de planilhas permanece a mesma)
     st.title("Planilhas Demonstrativas")
-    # ... (código omitido por brevidade, é o mesmo da versão anterior)
+    # ... (código omitido para brevidade)
 
 
