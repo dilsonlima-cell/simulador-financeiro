@@ -5,19 +5,31 @@ import numpy as np
 import plotly.graph_objects as go
 from io import BytesIO
 
-# --- Cores personalizadas ---
-# Cor principal (Diamante Lapidado, da imagem)
-BG_COLOR = "#EAE8E1" 
-# Cor para elementos de texto principal (preto)
-TEXT_COLOR = "#000000" 
-# Cor para detalhes/muted text (cinza escuro)
-MUTED_TEXT_COLOR = "#333333"
-# Cor para linhas de tabela
-TABLE_BORDER_COLOR = "#DCDCDC" # Um cinza mais claro para combinar com o fundo
-# Cor para o fundo da sidebar (um cinza escuro para contraste)
-SIDEBAR_BG = "#4A4A4A" 
-# Cor dos cards internos (sombra sutil em vez de branco)
-CARD_BG = f"rgba(0,0,0,0.03)" 
+# --- Cores personalizadas (baseadas na sua Image 2) ---
+BG_COLOR = "#FFF1D0"        # Papaya Whip - Fundo principal claro
+TEXT_COLOR = "#000000"       # Preto - Texto principal para contraste
+MUTED_TEXT_COLOR = "#333333" # Cinza escuro - Texto secundário
+TABLE_BORDER_COLOR = "#E0E0E0" # Cinza muito claro - Bordas de tabela sutis no fundo claro
+
+# Sidebar colors
+SIDEBAR_BG = "#086788"      # Blue Sapphire - Fundo da sidebar escuro e elegante
+SIDEBAR_TEXT_COLOR = "#FFFFFF" # Branco - Texto da sidebar
+SIDEBAR_MUTED_TEXT_COLOR = "rgba(255,255,255,0.8)" # Branco translúcido - Texto muted da sidebar
+
+# Card colors
+CARD_BG = "rgba(0,0,0,0.03)" # Sombra sutil para cards no fundo claro
+
+# Gradient for KPIs and general highlights
+GRADIENT_START = "#07A0C3"  # Blue Green
+GRADIENT_END = "#F0C808"    # Jonquil
+# Custom gradient for use in CSS
+CUSTOM_GRADIENT = f"linear-gradient(90deg, {GRADIENT_START}, {GRADIENT_END})"
+
+# Chart specific colors
+CHART_CAIXA_COLOR = "#F0C808" # Jonquil
+CHART_FUNDO_COLOR = "#07A0C3" # Blue Green
+CHART_RETIRADAS_COLOR = "#DD1C1A" # Maximum Red
+CHART_MODULOS_COLOR = "#086788" # Blue Sapphire
 
 # ---------------------------
 # CSS - Estilos da Página
@@ -27,17 +39,19 @@ st.markdown(
     f"""
     <style>
     :root{{
-        --g1: linear-gradient(90deg,#ff7a45,#ffc75f,#9acd32); /* Mantém gradiente existente */
+        --g1: {CUSTOM_GRADIENT}; /* Novo gradiente personalizado */
         --card-bg: {CARD_BG}; /* Fundo dos cards principais */
         --sidebar-bg: {SIDEBAR_BG}; /* Fundo da sidebar */
         --text-color: {TEXT_COLOR};
         --muted-text-color: {MUTED_TEXT_COLOR};
         --table-border-color: {TABLE_BORDER_COLOR};
+        --sidebar-text-color: {SIDEBAR_TEXT_COLOR};
+        --sidebar-muted-text-color: {SIDEBAR_MUTED_TEXT_COLOR};
     }}
     
     /* --- Estilos Globais --- */
     .stApp {{ 
-        background-color: {BG_COLOR}; 
+        background-color: var(--bg-color, {BG_COLOR}); /* Fallback para BG_COLOR */
         color: var(--text-color);
     }}
     
@@ -52,46 +66,69 @@ st.markdown(
     /* --- Sidebar --- */
     [data-testid="stSidebar"] {{
         background-color: var(--sidebar-bg);
-        color: white; /* Texto na sidebar geralmente mais claro */
+        color: var(--sidebar-text-color);
     }}
     [data-testid="stSidebar"] .stMarkdown > div > div > strong {{
-        color: white; /* Título principal da sidebar */
+        color: var(--sidebar-text-color); /* Título principal da sidebar */
     }}
     [data-testid="stSidebar"] .stMarkdown > div > div > div {{
-        color: rgba(255,255,255,0.8); /* Subtítulo da sidebar */
+        color: var(--sidebar-muted-text-color); /* Subtítulo da sidebar */
     }}
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h4,
     [data-testid="stSidebar"] h5, [data-testid="stSidebar"] h6 {{
-        color: white; /* Headers na sidebar */
+        color: var(--sidebar-text-color); /* Headers na sidebar */
     }}
     [data-testid="stSidebar"] label {{
-        color: white; /* Labels dos inputs na sidebar */
+        color: var(--sidebar-text-color); /* Labels dos inputs na sidebar */
     }}
     /* Ajustes para inputs na sidebar */
     [data-testid="stSidebar"] input, 
     [data-testid="stSidebar"] .stSelectbox {{
-        background-color: rgba(255,255,255,0.1);
-        color: white;
+        background-color: rgba(255,255,255,0.15); /* Mais opaco para legibilidade */
+        color: var(--sidebar-text-color);
+        border: 1px solid rgba(255,255,255,0.2);
     }}
     [data-testid="stSidebar"] input[type="number"], 
     [data-testid="stSidebar"] .stSelectbox > div > div > div {{
-        color: white; /* Garante que o texto de números e selects na sidebar seja branco */
+        color: var(--sidebar-text-color); /* Garante que o texto de números e selects na sidebar seja branco */
     }}
     /* Setas dos number_input */
     [data-testid="stSidebar"] button[kind="secondary"] {{
         background-color: rgba(255,255,255,0.1);
-        color: white;
+        color: var(--sidebar-text-color);
+        border: none;
     }}
     /* Botões "Adicionar" e "Remover" na sidebar */
     [data-testid="stSidebar"] .stButton > button {{
-        background-color: #666; /* Botões escuros na sidebar */
+        background-color: {GRADIENT_START}; /* Cor para botões de adicionar */
         color: white;
         border: none;
+        transition: background-color 0.2s;
     }}
     [data-testid="stSidebar"] .stButton > button:hover {{
-        background-color: #777;
+        background-color: {GRADIENT_END}; /* Hover para botões de adicionar */
         color: white;
+    }}
+    /* Específico para o botão de lixeira (remover) */
+    [data-testid="stSidebar"] button[data-testid^="stFileUploaderDropzone-STUDIO-stButton-"] {{
+        background-color: {CHART_RETIRADAS_COLOR}; /* Vermelho para o botão de lixeira */
+    }}
+    [data-testid="stSidebar"] button[data-testid^="stFileUploaderDropzone-STUDIO-stButton-"]:hover {{
+        background-color: #A00000; /* Vermelho mais escuro no hover */
+    }}
+    /* Correção visual para expander na sidebar, se necessário */
+    [data-testid="stSidebar"] [data-testid="stExpander"] > div:first-child {{
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 0.5rem;
+    }}
+    [data-testid="stSidebar"] [data-testid="stExpander"] {{
+        background-color: transparent; /* Certifica-se que o expander não tenha fundo indesejado */
+        border: none;
+    }}
+    [data-testid="stSidebar"] [data-testid="stExpander"] div[role="button"] p {{
+        color: var(--sidebar-text-color); /* Título do expander */
+        font-weight: bold;
     }}
 
 
@@ -100,21 +137,21 @@ st.markdown(
         background: var(--card-bg);
         border-radius: 12px;
         padding: 14px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-        border-left: 6px solid rgba(0,0,0,0.04);
-        color: var(--text-color); /* Garante texto preto */
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        border-left: 6px solid rgba(0,0,0,0.02);
+        color: var(--text-color);
     }}
     .kpi-card .small-muted {{
-        color: var(--muted-text-color); /* Garante texto cinza */
+        color: var(--muted-text-color);
     }}
     .kpi-gradient {{
         padding: 12px; border-radius: 12px;
         background: var(--g1);
-        color: white; /* Texto dentro do gradiente continua branco para contraste */
-        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
     }}
     .kpi-gradient .small-muted {{
-        color: rgba(255,255,255,0.8); /* Texto menor no gradiente mais claro */
+        color: rgba(255,255,255,0.8);
     }}
 
     /* --- Pills (tags) --- */
@@ -123,33 +160,33 @@ st.markdown(
         padding:6px 10px; 
         border-radius:999px; 
         font-size:12px; 
-        background:rgba(0,0,0,0.1); /* Fundo do 'pill' mais sutil e escuro */
-        color:#b94a00; /* Cor do texto da pill */
+        background:rgba(0,0,0,0.08); /* Fundo do 'pill' mais sutil */
+        color:{GRADIENT_START}; /* Cor do texto da pill com base na nova paleta */
         border:1px solid rgba(0,0,0,0.03); 
     }}
 
     /* --- Tabelas (st.table e st.dataframe) --- */
     table, th, td {{ 
-        color: var(--text-color) !important; /* Força o texto da tabela a ser preto */
-        border-bottom: 1px solid var(--table-border-color); /* Linhas da tabela em cinza */
+        color: var(--text-color) !important;
+        border-bottom: 1px solid var(--table-border-color);
     }}
     thead th {{
-        border-bottom: 2px solid var(--table-border-color); /* Cabeçalho da tabela com linha mais grossa */
+        border-bottom: 2px solid var(--table-border-color);
     }}
     /* Para o st.dataframe especificamente */
     .stDataFrame > div > div > div > div > div > div {{
-        background-color: transparent !important; /* Remove fundo branco do dataframe */
+        background-color: transparent !important;
         color: var(--text-color) !important;
     }}
     .stDataFrame thead th {{
-        background-color: rgba(0,0,0,0.05) !important; /* Leve sombreamento no cabeçalho do dataframe */
+        background-color: rgba(0,0,0,0.02) !important; /* Leve sombreamento no cabeçalho do dataframe */
         color: var(--text-color) !important;
     }}
     .stDataFrame tbody tr {{
         background-color: transparent !important;
     }}
     .stDataFrame tbody tr:nth-child(even) {{
-        background-color: rgba(0,0,0,0.02) !important; /* Linhas zebradas sutis */
+        background-color: rgba(0,0,0,0.01) !important; /* Linhas zebradas sutis */
     }}
     .stDataFrame .css-x1y8h7 {{ /* Ícone de ordenação */
         color: var(--text-color) !important;
@@ -157,20 +194,21 @@ st.markdown(
 
     /* --- Elementos de formulário (inputs, selects, sliders) --- */
     label {{
-        color: var(--text-color); /* Labels dos inputs */
+        color: var(--text-color);
     }}
     /* Estilo para inputs e selects no corpo principal */
     .stNumberInput, .stSelectbox {{
-        background-color: var(--card-bg); /* Usa o card-bg para inputs */
+        background-color: var(--card-bg);
         border-radius: 8px;
         padding: 5px;
+        border: 1px solid var(--table-border-color); /* Adiciona borda sutil */
     }}
     .stNumberInput input, .stSelectbox > div > div > div {{
         color: var(--text-color);
     }}
     /* Cor dos botões de incremento/decremento dos number_input */
     .stNumberInput button[kind="secondary"] {{
-        background-color: rgba(0,0,0,0.1);
+        background-color: rgba(0,0,0,0.05);
         color: var(--text-color);
     }}
     </style>
@@ -274,7 +312,7 @@ def simulate(
 # Sidebar - Entradas do Usuário
 # ---------------------------
 with st.sidebar:
-    st.markdown("<div style='display:flex; gap:10px; align-items:center'><div style='width:48px;height:48px;border-radius:10px;background:var(--g1)'></div><div><strong>Simulador Modular</strong><div style='font-size:12px;'>Projeção com reinvestimento</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div style='display:flex; gap:10px; align-items:center'><div style='width:48px;height:48px;border-radius:10px;background:var(--g1)'></div><div><strong>Simulador Modular</strong><div style='font-size:12px;color:var(--sidebar-muted-text-color);'>Projeção com reinvestimento</div></div></div>", unsafe_allow_html=True)
     st.markdown("---")
     st.header("1. Configuração Geral")
     years = st.slider("Horizonte de investimento (anos)", 1, 30, 10)
@@ -297,6 +335,7 @@ with st.sidebar:
     st.markdown("---")
     st.header("3. Eventos Financeiros")
     
+    # Inicialização de session_state para garantir que as listas existam
     if "aportes" not in st.session_state:
         st.session_state.aportes = [{"mes": 3, "valor": 50_000.0}]
     if "retiradas" not in st.session_state:
@@ -306,32 +345,44 @@ with st.sidebar:
 
     with st.expander("Aportes (investimentos pontuais)"):
         for i, a in enumerate(st.session_state.aportes):
-            c1, c2, c3 = st.columns([1,2,1])
-            a["mes"] = c1.number_input(f"Mês (aporte #{i+1})", 1, years*12, a["mes"], key=f"ap_mes_{i}")
-            a["valor"] = c2.number_input(f"Valor (R$) (aporte #{i+1})", 0.0, value=a["valor"], step=1000.0, key=f"ap_val_{i}", format="%.2f")
-            if c3.button("🗑️", key=f"ap_rem_{i}"):
-                st.session_state.aportes.pop(i); st.rerun()
-        if st.button("Adicionar Aporte"):
+            col_a1, col_a2, col_a3 = st.columns([1,2,0.5]) # Ajuste no layout das colunas
+            with col_a1:
+                a["mes"] = st.number_input(f"Mês", 1, years*12, a["mes"], key=f"ap_mes_{i}", label_visibility="collapsed")
+            with col_a2:
+                a["valor"] = st.number_input(f"Valor (R$)", 0.0, value=a["valor"], step=1000.0, key=f"ap_val_{i}", format="%.2f", label_visibility="collapsed")
+            with col_a3:
+                st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True) # Espaçamento para alinhar botão
+                if st.button("🗑️", key=f"ap_rem_{i}", help="Remover Aporte"):
+                    st.session_state.aportes.pop(i); st.rerun()
+        if st.button("Adicionar Aporte", key="add_aporte_btn"):
             st.session_state.aportes.append({"mes": 1, "valor": 10000.0}); st.rerun()
 
     with st.expander("Retiradas (% sobre o caixa mensal)"):
         for i, r in enumerate(st.session_state.retiradas):
-            c1, c2, c3 = st.columns([1,2,1])
-            r["mes"] = c1.number_input(f"Mês início (retirada #{i+1})", 1, years*12, r["mes"], key=f"re_mes_{i}")
-            r["percentual"] = c2.number_input(f"% (retirada #{i+1})", 0.0, 100.0, r["percentual"], step=1.0, key=f"re_pct_{i}", format="%.1f")
-            if c3.button("🗑️", key=f"re_rem_{i}"):
-                st.session_state.retiradas.pop(i); st.rerun()
-        if st.button("Adicionar Retirada"):
+            col_r1, col_r2, col_r3 = st.columns([1,2,0.5])
+            with col_r1:
+                r["mes"] = st.number_input(f"Mês início", 1, years*12, r["mes"], key=f"re_mes_{i}", label_visibility="collapsed")
+            with col_r2:
+                r["percentual"] = st.number_input(f"% do caixa", 0.0, 100.0, r["percentual"], step=1.0, key=f"re_pct_{i}", format="%.1f", label_visibility="collapsed")
+            with col_r3:
+                st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                if st.button("🗑️", key=f"re_rem_{i}", help="Remover Retirada"):
+                    st.session_state.retiradas.pop(i); st.rerun()
+        if st.button("Adicionar Retirada", key="add_retirada_btn"):
             st.session_state.retiradas.append({"mes": 1, "percentual": 10.0}); st.rerun()
 
     with st.expander("Fundos de Reserva (% sobre o caixa mensal)"):
         for i, f in enumerate(st.session_state.fundos):
-            c1, c2, c3 = st.columns([1,2,1])
-            f["mes"] = c1.number_input(f"Mês início (fundo #{i+1})", 1, years*12, f["mes"], key=f"fu_mes_{i}")
-            f["percentual"] = c2.number_input(f"% do caixa (fundo #{i+1})", 0.0, 100.0, f["percentual"], step=1.0, key=f"fu_pct_{i}", format="%.1f")
-            if c3.button("🗑️", key=f"fu_rem_{i}"):
-                st.session_state.fundos.pop(i); st.rerun()
-        if st.button("Adicionar Fundo"):
+            col_f1, col_f2, col_f3 = st.columns([1,2,0.5])
+            with col_f1:
+                f["mes"] = st.number_input(f"Mês início", 1, years*12, f["mes"], key=f"fu_mes_{i}", label_visibility="collapsed")
+            with col_f2:
+                f["percentual"] = st.number_input(f"% do caixa", 0.0, 100.0, f["percentual"], step=1.0, key=f"fu_pct_{i}", format="%.1f", label_visibility="collapsed")
+            with col_f3:
+                st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                if st.button("🗑️", key=f"fu_rem_{i}", help="Remover Fundo"):
+                    st.session_state.fundos.pop(i); st.rerun()
+        if st.button("Adicionar Fundo", key="add_fundo_btn"):
             st.session_state.fundos.append({"mes": 1, "percentual": 5.0}); st.rerun()
 
 # ---------------------------
@@ -360,9 +411,9 @@ colA, colB = st.columns([2, 1])
 with colA:
     st.subheader("Evolução Financeira ao Longo do Tempo")
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["Mês"], y=df["Caixa (Final Mês)"], mode="lines", name="Caixa", line=dict(color="#ff7a45", width=2.5)))
-    fig.add_trace(go.Scatter(x=df["Mês"], y=df["Fundo Acumulado"], mode="lines", name="Fundo Acumulado", line=dict(color="#9acd32", width=1.5)))
-    fig.add_trace(go.Scatter(x=df["Mês"], y=df["Retiradas Acumuladas"], mode="lines", name="Retiradas Acumuladas", line=dict(color="#ffc75f", width=1.5)))
+    fig.add_trace(go.Scatter(x=df["Mês"], y=df["Caixa (Final Mês)"], mode="lines", name="Caixa", line=dict(color=CHART_CAIXA_COLOR, width=2.5)))
+    fig.add_trace(go.Scatter(x=df["Mês"], y=df["Fundo Acumulado"], mode="lines", name="Fundo Acumulado", line=dict(color=CHART_FUNDO_COLOR, width=1.5)))
+    fig.add_trace(go.Scatter(x=df["Mês"], y=df["Retiradas Acumuladas"], mode="lines", name="Retiradas Acumuladas", line=dict(color=CHART_RETIRADAS_COLOR, width=1.5)))
     
     # Atualiza layout do gráfico para corresponder ao tema
     fig.update_layout(
@@ -380,7 +431,7 @@ with colA:
 with colB:
     st.subheader("Evolução dos Módulos")
     fig_mod = go.Figure()
-    fig_mod.add_trace(go.Scatter(x=df["Mês"], y=df["Módulos Ativos"], mode="lines", name="Módulos", line=dict(color="#2a9d8f", width=2.5), fill='tozeroy'))
+    fig_mod.add_trace(go.Scatter(x=df["Mês"], y=df["Módulos Ativos"], mode="lines", name="Módulos", line=dict(color=CHART_MODULOS_COLOR, width=2.5), fill='tozeroy'))
     # Atualiza layout do gráfico para corresponder ao tema
     fig_mod.update_layout(
         margin=dict(l=10, r=10, t=30, b=10),
