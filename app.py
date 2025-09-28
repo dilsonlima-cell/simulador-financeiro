@@ -93,7 +93,9 @@ KPI_GREEN = "#70AD47"
 KPI_BLUE = "#4472C4"
 KPI_RED = "#C00000"
 KPI_TEAL = "#2F75B5"
-CARD_COLOR = "#FFFFFF"
+# Cores do gráfico de pizza
+CHART_ORANGE = "#ED7D31"
+CHART_GRAY = "#A5A5A5"
 
 # ---------------------------
 # NAVEGAÇÃO E CABEÇALHO
@@ -124,7 +126,7 @@ else:
 render_header_and_tabs()
 
 # ---------------------------
-# Funções Utilitárias e de Lógica (DO SEU CÓDIGO)
+# Funções Utilitárias e de Lógica
 # ---------------------------
 def render_kpi_block(title, value, color):
     st.markdown(f"""
@@ -304,27 +306,220 @@ if st.session_state.active_page == 'Configurações':
     st.markdown("<br>", unsafe_allow_html=True)
 
     with st.container(border=True):
-        st.subheader("Parâmetros Globais")
+        st.subheader("Parâmetros Globais e Eventos Financeiros")
         cfg_g = st.session_state.config['global']
         c1, c2 = st.columns(2)
         cfg_g['years'] = c1.number_input("Horizonte de investimento (anos)", 1, 50, cfg_g['years'])
         cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em % do lucro.")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        st.subheader("Eventos Financeiros")
-        st.markdown("<h6>Aportes (investimentos pontuais)</h6>", unsafe_allow_html=True)
-        # (código completo dos aportes, retiradas e fundos)
         
+        st.markdown("---")
+        st.markdown("<h6>Aportes (investimentos pontuais)</h6>", unsafe_allow_html=True)
+        for i, aporte in enumerate(st.session_state.config['global']['aportes']):
+            cols = st.columns([2, 3, 1])
+            aporte['mes'] = cols[0].number_input("Mês", min_value=1, value=aporte['mes'], key=f"aporte_mes_{i}")
+            aporte['valor'] = cols[1].number_input("Valor (R$)", min_value=0.0, value=aporte['valor'], format="%.2f", key=f"aporte_valor_{i}")
+            if cols[2].button("Remover", key=f"aporte_remover_{i}"):
+                st.session_state.config['global']['aportes'].pop(i); st.rerun()
+        if st.button("Adicionar Aporte"):
+            st.session_state.config['global']['aportes'].append({"mes": 1, "valor": 0.0}); st.rerun()
+        
+        st.markdown("---")
+        st.markdown("<h6>Retiradas (% sobre o lucro mensal)</h6>", unsafe_allow_html=True)
+        for i, retirada in enumerate(st.session_state.config['global']['retiradas']):
+            cols = st.columns([2, 3, 1])
+            retirada['mes'] = cols[0].number_input("Mês início", min_value=1, value=retirada['mes'], key=f"retirada_mes_{i}")
+            retirada['percentual'] = cols[1].number_input("% do lucro", min_value=0.0, max_value=100.0, value=retirada['percentual'], format="%.1f", key=f"retirada_pct_{i}")
+            if cols[2].button("Remover", key=f"retirada_remover_{i}"):
+                st.session_state.config['global']['retiradas'].pop(i); st.rerun()
+        if st.button("Adicionar Retirada"):
+            st.session_state.config['global']['retiradas'].append({"mes": 1, "percentual": 30.0}); st.rerun()
+        
+        st.markdown("---")
+        st.markdown("<h6>Fundos de Reserva (% sobre o lucro mensal)</h6>", unsafe_allow_html=True)
+        for i, fundo in enumerate(st.session_state.config['global']['fundos']):
+            cols = st.columns([2, 3, 1])
+            fundo['mes'] = cols[0].number_input("Mês início", min_value=1, value=fundo['mes'], key=f"fundo_mes_{i}")
+            fundo['percentual'] = cols[1].number_input("% do lucro", min_value=0.0, max_value=100.0, value=fundo['percentual'], format="%.1f", key=f"fundo_pct_{i}")
+            if cols[2].button("Remover", key=f"fundo_remover_{i}"):
+                st.session_state.config['global']['fundos'].pop(i); st.rerun()
+        if st.button("Adicionar Fundo"):
+            st.session_state.config['global']['fundos'].append({"mes": 1, "percentual": 10.0}); st.rerun()
+
 # ---------------------------
 # PÁGINA DO DASHBOARD
 # ---------------------------
 if st.session_state.active_page == 'Dashboard':
-    # ... (código completo do Dashboard, usando render_kpi_block) ...
+    with st.container(border=True):
+        st.subheader("Simulador de Estratégias")
+        strat_cols = st.columns(3)
+        if strat_cols[0].button("📈 Simular: Comprar", use_container_width=True):
+            with st.spinner("Calculando simulação..."):
+                st.session_state.simulation_df = simulate(st.session_state.config, 'buy'); st.session_state.comparison_df = pd.DataFrame()
+        if strat_cols[1].button("📈 Simular: Alugar", use_container_width=True):
+            with st.spinner("Calculando simulação..."):
+                st.session_state.simulation_df = simulate(st.session_state.config, 'rent'); st.session_state.comparison_df = pd.DataFrame()
+        if strat_cols[2].button("📈 Simular: Intercalar", use_container_width=True):
+            with st.spinner("Calculando simulação..."):
+                st.session_state.simulation_df = simulate(st.session_state.config, 'alternate'); st.session_state.comparison_df = pd.DataFrame()
+        st.markdown("---")
+        if st.button("📊 Comparar Todas as Estratégias", use_container_width=True):
+            with st.spinner("Calculando as três simulações..."):
+                df_buy = simulate(st.session_state.config, 'buy'); df_buy['Estratégia'] = 'Comprar'
+                df_rent = simulate(st.session_state.config, 'rent'); df_rent['Estratégia'] = 'Alugar'
+                df_alt = simulate(st.session_state.config, 'alternate'); df_alt['Estratégia'] = 'Intercalar'
+                st.session_state.comparison_df = pd.concat([df_buy, df_rent, df_alt]); st.session_state.simulation_df = pd.DataFrame()
+
+    st.markdown("---")
+
+    if not st.session_state.comparison_df.empty:
+        st.header("Análise Comparativa de Estratégias")
+        df_comp = st.session_state.comparison_df
+        final_buy = df_comp[df_comp['Estratégia'] == 'Comprar'].iloc[-1]
+        final_rent = df_comp[df_comp['Estratégia'] == 'Alugar'].iloc[-1]
+        final_alt = df_comp[df_comp['Estratégia'] == 'Intercalar'].iloc[-1]
+        kpi_cols = st.columns(4)
+        with kpi_cols[0]: render_kpi_block("Patrimônio (Comprar)", fmt_brl(final_buy['Patrimônio Líquido']), KPI_BLUE)
+        with kpi_cols[1]: render_kpi_block("Patrimônio (Alugar)", fmt_brl(final_rent['Patrimônio Líquido']), KPI_TEAL)
+        with kpi_cols[2]: render_kpi_block("Patrimônio (Intercalar)", fmt_brl(final_alt['Patrimônio Líquido']), CHART_ORANGE)
+        with kpi_cols[3]:
+            best_strategy = pd.Series({'Comprar': final_buy['Patrimônio Líquido'], 'Alugar': final_rent['Patrimônio Líquido'], 'Intercalar': final_alt['Patrimônio Líquido']}).idxmax()
+            render_kpi_block("Melhor Estratégia", best_strategy, KPI_GREEN)
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.subheader("Métricas ao Longo do Tempo")
+            metric_options = { "Patrimônio Líquido": "Patrimônio Líquido", "Módulos Ativos": "Módulos Ativos", "Retiradas Acumuladas": "Retiradas Acumuladas"}
+            selected_metric = st.selectbox("Selecione uma métrica para comparar:", options=list(metric_options.keys()))
+            fig_comp = px.line(df_comp, x="Mês", y=metric_options[selected_metric], color='Estratégia', color_discrete_map={'Comprar': KPI_BLUE, 'Alugar': KPI_TEAL, 'Intercalar': CHART_ORANGE })
+            fig_comp.update_layout(height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR, font_family="Calibri")
+            st.plotly_chart(fig_comp, use_container_width=True)
+
+    elif not st.session_state.simulation_df.empty:
+        st.header("Resultados da Simulação")
+        df = st.session_state.simulation_df; final = df.iloc[-1]; cfg = st.session_state.config
+        inv_inicial_modulos = (cfg['rented']['modules_init'] * cfg['rented']['cost_per_module']) + (cfg['owned']['modules_init'] * cfg['owned']['cost_per_module'])
+        entrada_terreno = 0
+        if cfg['owned']['land_total_value'] > 0:
+            entrada_terreno = cfg['owned']['land_total_value'] * (cfg['owned']['land_down_payment_pct'] / 100.0)
+        investimento_inicial_total = inv_inicial_modulos + entrada_terreno
+        
+        kpi_col, chart_col = st.columns([1, 3])
+        with kpi_col:
+            render_kpi_block("Valor Investido", fmt_brl(investimento_inicial_total), KPI_YELLOW)
+            st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+            render_kpi_block("Patrimônio Líquido Final", fmt_brl(final['Patrimônio Líquido']), KPI_GREEN)
+            st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+            render_kpi_block("Retiradas Acumuladas", fmt_brl(final['Retiradas Acumuladas']), KPI_BLUE)
+            st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+            render_kpi_block("Fundo Acumulado", fmt_brl(final['Fundo Acumulado']), KPI_TEAL)
+        
+        with chart_col:
+            with st.container(border=True):
+                st.subheader("Evolução do Patrimônio vs. Investimento")
+                fig_pat = go.Figure()
+                fig_pat.add_trace(go.Scatter(x=df["Mês"], y=df["Patrimônio Líquido"], name="Patrimônio", line=dict(color=KPI_GREEN, width=2.5)))
+                fig_pat.add_trace(go.Scatter(x=df["Mês"], y=df["Investimento Total Acumulado"], name="Investimento", line=dict(color=CHART_GRAY, width=1.5)))
+                fig_pat.update_layout(height=400, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR, font_family="Calibri")
+                st.plotly_chart(fig_pat, use_container_width=True)
+
+    else:
+        st.info("👆 Selecione uma estratégia de simulação para visualizar os resultados.")
 
 # ---------------------------
 # PÁGINA DE PLANILHAS (RELATÓRIOS)
 # ---------------------------
 if st.session_state.active_page == 'Planilhas':
-    # ... (código completo e corrigido da página de relatórios) ...
+    st.title("Relatórios e Dados")
+    st.markdown("Explore os dados detalhados da simulação mês a mês.")
+    df_to_show = pd.DataFrame()
+    if not st.session_state.comparison_df.empty: df_to_show = st.session_state.comparison_df
+    elif not st.session_state.simulation_df.empty: df_to_show = st.session_state.simulation_df
+
+    if df_to_show.empty:
+        st.info("👈 Vá para a página 'Dashboard' para iniciar uma simulação.")
+    else:
+        df = df_to_show
+        main_cols = st.columns([6, 4])
+        with main_cols[0]:
+            with st.container(border=True):
+                st.subheader("Análise por Ponto no Tempo")
+                df_analysis = df
+                if 'Estratégia' in df.columns:
+                    selected_strategy = st.selectbox("Selecione a estratégia para análise:", df['Estratégia'].unique())
+                    df_analysis = df[df['Estratégia'] == selected_strategy].copy()
+                c1, c2 = st.columns(2)
+                anos_disponiveis = df_analysis['Ano'].unique()
+                selected_year = c1.selectbox("Selecione o ano", options=anos_disponiveis)
+                months_in_year = df_analysis[df_analysis['Ano'] == selected_year]['Mês'].unique()
+                month_labels = [((m - 1) % 12) + 1 for m in months_in_year]
+                selected_month_label = c2.selectbox("Selecione o mês", options=month_labels)
+                selected_month_abs = df_analysis[(df_analysis['Ano'] == selected_year) & (((df_analysis['Mês'] - 1) % 12) + 1 == selected_month_label)]['Mês'].iloc[0]
+                data_point = df_analysis.loc[df_analysis["Mês"] == selected_month_abs].iloc[0]
+                
+                st.markdown("---")
+                res_cols = st.columns(2)
+                with res_cols[0]:
+                    render_kpi_block("Total de Módulos", f"{int(data_point['Módulos Ativos'])}", CHART_GRAY)
+                    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                    render_kpi_block("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']), KPI_GREEN)
+                with res_cols[1]:
+                    render_kpi_block("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']), KPI_YELLOW)
+                    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                    render_kpi_block("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']), KPI_BLUE)
+        with main_cols[1]:
+            with st.container(border=True):
+                st.subheader("Resumo Gráfico do Mês")
+                chart_data = pd.DataFrame({"Categoria": ["Receita", "Gastos", "Retirada", "Fundo"],"Valor": [data_point['Receita'],data_point['Gastos'],data_point['Retirada (Mês)'],data_point['Fundo (Mês)']]})
+                fig_monthly = px.bar(chart_data, x="Categoria", y="Valor", text_auto='.2s', color="Categoria", color_discrete_map={"Receita": KPI_GREEN, "Gastos": CHART_ORANGE, "Retirada": KPI_RED, "Fundo": KPI_TEAL})
+                fig_monthly.update_layout(showlegend=False, height=450, plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR, font_family="Calibri")
+                st.plotly_chart(fig_monthly, use_container_width=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.subheader("Tabela Completa da Simulação")
+            df_display_base = df
+            if 'Estratégia' in df.columns:
+                st.markdown(f"Mostrando dados da estratégia: **{selected_strategy}**")
+                df_display_base = df_analysis
+            
+            all_columns = df_display_base.columns.tolist()
+            if 'Estratégia' in all_columns: all_columns.remove('Estratégia')
+            default_cols = ['Mês', 'Ano', 'Módulos Ativos', 'Receita', 'Gastos', 'Caixa (Final Mês)', 'Patrimônio Líquido']
+            
+            if set(st.session_state.column_visibility.keys()) != set(all_columns):
+                st.session_state.column_visibility = {col: (col in default_cols) for col in all_columns}
+            
+            with st.expander("Exibir/Ocultar Colunas da Tabela"):
+                toggle_cols = st.columns(4)
+                for i, col_name in enumerate(all_columns):
+                    with toggle_cols[i % 4]:
+                        st.session_state.column_visibility[col_name] = st.toggle(col_name, value=st.session_state.column_visibility.get(col_name, False))
+            
+            cols_to_show = [col for col, is_visible in st.session_state.column_visibility.items() if is_visible]
+            
+            page_size = 12
+            total_pages = (len(df_display_base) - 1) // page_size + 1
+            if 'page' not in st.session_state: st.session_state.page = 0
+            if st.session_state.page >= total_pages: st.session_state.page = 0
+            start_idx = st.session_state.page * page_size
+            end_idx = start_idx + page_size
+            df_display = df_display_base.iloc[start_idx:end_idx].copy()
+            
+            format_cols = ["Receita", "Manutenção", "Aluguel", "Parcelas Terrenos (Novos)", "Aporte", "Fundo (Mês)", "Retirada (Mês)", "Caixa (Final Mês)", "Investimento Total Acumulado", "Fundo Acumulado", "Retiradas Acumuladas", "Patrimônio Líquido", "Gastos"]
+            for col in format_cols:
+                if col in df_display.columns:
+                    df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
+            
+            if cols_to_show:
+                st.dataframe( df_display[cols_to_show], use_container_width=True, hide_index=True )
+            else:
+                st.warning("Selecione ao menos uma coluna para exibir os dados.")
+
+            page_cols = st.columns([1, 1, 8])
+            if page_cols[0].button("Anterior", disabled=(st.session_state.page == 0)):
+                st.session_state.page -= 1; st.rerun()
+            if page_cols[1].button("Próxima", disabled=(st.session_state.page >= total_pages - 1)):
+                st.session_state.page += 1; st.rerun()
+            page_cols[2].markdown(f"<div style='padding-top:10px;'>Página {st.session_state.page + 1} de {total_pages}</div>", unsafe_allow_html=True)
+
+            excel_bytes = df_to_excel_bytes(df)
+            st.download_button( "📥 Baixar Relatório Completo (Excel)", data=excel_bytes, file_name="relatorio_simulacao.xlsx")
