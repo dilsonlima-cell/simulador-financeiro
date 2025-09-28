@@ -21,8 +21,8 @@ CHART_CAIXA_COLOR = "#F0C808"
 CHART_FUNDO_COLOR = "#07A0C3"
 CHART_RETIRADAS_COLOR = "#DD1C1A"
 CHART_MODULOS_COLOR = SIDEBAR_BG
-CHART_RECEITA_COLOR = "#2a9d8f" # Cor nova para receita
-CHART_GASTOS_COLOR = "#e76f51" # Cor nova para gastos
+CHART_RECEITA_COLOR = "#2a9d8f"
+CHART_GASTOS_COLOR = "#e76f51"
 
 # ---------------------------
 # CSS - Estilos da Página
@@ -40,12 +40,17 @@ st.markdown(f"""
         .stApp {{ background-color: {BG_COLOR}; }}
         .header-title, h1, h2, h3, h4, h5, h6, label, .st-emotion-cache-16idsys p {{ color: {TEXT_COLOR} !important; }}
         .subhead, .st-emotion-cache-1ghhuty p {{ color: {MUTED_TEXT_COLOR} !important; }}
+        /* Correção de legibilidade para Métricas */
+        [data-testid="stMetricLabel"] p {{ color: {MUTED_TEXT_COLOR} !important; }}
+        [data-testid="stMetricValue"] div {{ color: {TEXT_COLOR} !important; }}
         .card {{ background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid {TABLE_BORDER_COLOR}; height: 100%; }}
         .kpi-card .small-muted {{ color: {MUTED_TEXT_COLOR}; font-size: 0.9rem; }}
-        .kpi-card .kpi-value {{ font-size: 2rem; font-weight: 700; }}
+        .kpi-card .kpi-value {{ font-size: 1.8rem; font-weight: 700; }} /* Fonte levemente menor para 5 KPIs */
         .kpi-gradient {{ padding: 1.5rem; border-radius: 12px; background: {CUSTOM_GRADIENT}; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.06); height: 100%; }}
-        .kpi-gradient .small-muted {{ color: rgba(255,255,255,0.8); font-size: 0.9rem; }}
-        .kpi-gradient .kpi-value {{ font-size: 2rem; font-weight: 700; }}
+        .kpi-colored {{ padding: 1.5rem; border-radius: 12px; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.06); height: 100%; }}
+        .kpi-colored .small-muted {{ color: rgba(255,255,255,0.8); }}
+        .kpi-gradient .small-muted, .kpi-colored .small-muted {{ font-size: 0.9rem; }}
+        .kpi-gradient .kpi-value, .kpi-colored .kpi-value {{ font-size: 1.8rem; font-weight: 700; }}
         .stDataFrame, .stTable {{ border: none; box-shadow: none; padding: 0; }}
         table {{ width: 100%; }}
     </style>
@@ -72,7 +77,7 @@ def create_annual_summary(df: pd.DataFrame):
     return annual_df[['Ano', 'Módulos (Final Ano)', 'Receita', 'Manutenção', 'Aluguel', 'Aporte', 'Retirada (Ano)', 'Fundo (Ano)', 'Módulos Comprados no Ano', 'Caixa (Final Ano)']]
 
 def simulate(config):
-    # (Lógica de simulação permanece a mesma da versão anterior)
+    # (Lógica de simulação permanece a mesma)
     years, modules_init, cost_per_module, cost_correction_rate, revenue_per_module, maintenance_per_module, rent_value, rent_start_month, max_withdraw_value, aportes, retiradas, fundos = (
         config['years'], config['modules_init'], config['cost_per_module'], config['cost_correction_rate'], config['revenue_per_module'], config['maintenance_per_module'],
         config['rent_value'], config['rent_start_month'], config['max_withdraw_value'], config['aportes'], config['retiradas'], config['fundos']
@@ -129,7 +134,7 @@ def simulate(config):
 # Inicialização e Gerenciamento do Estado
 # ---------------------------
 def get_default_config():
-    return {'years': 15, 'modules_init': 1, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0, 'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0, 'rent_value': 750.0, 'rent_start_month': 23, 'max_withdraw_value': 50000.0, 'aportes': [{"mes": 3, "valor": 0}], 'retiradas': [{"mes": 25, "percentual": 30.0}], 'fundos': [{"mes": 25, "percentual": 10.0}]}
+    return {'years': 15, 'modules_init': 1, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0, 'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0, 'rent_value': 750.0, 'rent_start_month': 23, 'max_withdraw_value': 50000.0, 'aportes': [{"mes": 3, "valor": 0.0}], 'retiradas': [{"mes": 25, "percentual": 30.0}], 'fundos': [{"mes": 25, "percentual": 10.0}]}
 
 if 'config' not in st.session_state: st.session_state.config = get_default_config()
 if 'simulation_df' not in st.session_state: st.session_state.simulation_df = pd.DataFrame()
@@ -161,9 +166,7 @@ if st.session_state.active_page == 'Configurações':
             st.session_state.simulation_df = simulate(st.session_state.config)
         st.success("Simulação concluída! Verifique as outras abas.")
     
-    # (O restante do código da página de configurações permanece o mesmo)
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+    with st.container(border=True):
         st.subheader("Configuração Geral")
         c1, c2 = st.columns(2)
         with c1:
@@ -175,43 +178,41 @@ if st.session_state.active_page == 'Configurações':
             st.session_state.config['modules_init'] = st.number_input("Módulos iniciais", 1, value=st.session_state.config['modules_init'])
             st.session_state.config['cost_correction_rate'] = st.number_input("Correção anual do custo do módulo (%)", 0.0, value=st.session_state.config['cost_correction_rate'], format="%.1f")
             st.session_state.config['maintenance_per_module'] = st.number_input("Manutenção mensal por módulo (R$)", 0.0, value=st.session_state.config['maintenance_per_module'], format="%.2f")
-        st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+    
+    with st.container(border=True):
         st.subheader("Custos Fixos")
         c1, c2 = st.columns(2)
         with c1: st.session_state.config['rent_value'] = st.number_input("Aluguel mensal do terreno (R$)", 0.0, value=st.session_state.config['rent_value'], format="%.2f")
         with c2: st.session_state.config['rent_start_month'] = st.number_input("Mês de início do aluguel", 1, st.session_state.config['years']*12, st.session_state.config['rent_start_month'])
-        st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    with st.container(border=True):
         st.subheader("Eventos Financeiros")
         st.markdown("###### Aportes (investimentos pontuais)")
         for i, aporte in enumerate(st.session_state.config['aportes']):
             c1, c2, c3 = st.columns([1, 2, 1])
-            st.session_state.config['aportes'][i]['mes'] = c1.number_input("Mês", 1, st.session_state.config['years']*12, aporte['mes'], key=f"ap_mes_{i}")
-            st.session_state.config['aportes'][i]['valor'] = c2.number_input("Valor (R$)", 0.0, aporte['valor'], format="%.2f", key=f"ap_val_{i}")
+            st.session_state.config['aportes'][i]['mes'] = c1.number_input("Mês", 1, st.session_state.config['years']*12, int(aporte['mes']), key=f"ap_mes_{i}")
+            # CORREÇÃO DO ERRO: Cast para float para evitar MixedNumericTypesError
+            st.session_state.config['aportes'][i]['valor'] = c2.number_input("Valor (R$)", 0.0, float(aporte['valor']), format="%.2f", key=f"ap_val_{i}")
             if c3.button("Remover", key=f"ap_rem_{i}"): st.session_state.config['aportes'].pop(i); st.rerun()
         if st.button("Adicionar Aporte"): st.session_state.config['aportes'].append({"mes": 1, "valor": 10000.0}); st.rerun()
         st.markdown("<hr>", unsafe_allow_html=True)
+        
         st.markdown("###### Retiradas (% sobre o caixa mensal)")
         for i, retirada in enumerate(st.session_state.config['retiradas']):
             c1, c2, c3 = st.columns([1, 2, 1])
-            st.session_state.config['retiradas'][i]['mes'] = c1.number_input("Mês início", 1, st.session_state.config['years']*12, retirada['mes'], key=f"ret_mes_{i}")
-            st.session_state.config['retiradas'][i]['percentual'] = c2.number_input("% do caixa", 0.0, 100.0, retirada['percentual'], format="%.1f", key=f"ret_pct_{i}")
+            st.session_state.config['retiradas'][i]['mes'] = c1.number_input("Mês início", 1, st.session_state.config['years']*12, int(retirada['mes']), key=f"ret_mes_{i}")
+            st.session_state.config['retiradas'][i]['percentual'] = c2.number_input("% do caixa", 0.0, 100.0, float(retirada['percentual']), format="%.1f", key=f"ret_pct_{i}")
             if c3.button("Remover", key=f"ret_rem_{i}"): st.session_state.config['retiradas'].pop(i); st.rerun()
         if st.button("Adicionar Retirada"): st.session_state.config['retiradas'].append({"mes": 1, "percentual": 10.0}); st.rerun()
         st.markdown("<hr>", unsafe_allow_html=True)
+
         st.markdown("###### Fundos de Reserva (% sobre o caixa mensal)")
         for i, fundo in enumerate(st.session_state.config['fundos']):
             c1, c2, c3 = st.columns([1, 2, 1])
-            st.session_state.config['fundos'][i]['mes'] = c1.number_input("Mês início", 1, st.session_state.config['years']*12, fundo['mes'], key=f"fun_mes_{i}")
-            st.session_state.config['fundos'][i]['percentual'] = c2.number_input("% do caixa", 0.0, 100.0, fundo['percentual'], format="%.1f", key=f"fun_pct_{i}")
+            st.session_state.config['fundos'][i]['mes'] = c1.number_input("Mês início", 1, st.session_state.config['years']*12, int(fundo['mes']), key=f"fun_mes_{i}")
+            st.session_state.config['fundos'][i]['percentual'] = c2.number_input("% do caixa", 0.0, 100.0, float(fundo['percentual']), format="%.1f", key=f"fun_pct_{i}")
             if c3.button("Remover", key=f"fun_rem_{i}"): st.session_state.config['fundos'].pop(i); st.rerun()
         if st.button("Adicionar Fundo"): st.session_state.config['fundos'].append({"mes": 1, "percentual": 5.0}); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # PÁGINA DO DASHBOARD
 if st.session_state.active_page == 'Dashboard':
@@ -223,11 +224,12 @@ if st.session_state.active_page == 'Dashboard':
         df = st.session_state.simulation_df
         final = df.iloc[-1]
         
-        kpi_cols = st.columns(4)
+        kpi_cols = st.columns(5)
         kpi_cols[0].markdown(f"<div class='kpi-card'><div class='small-muted'>Investimento Inicial</div><div class='kpi-value'>{fmt_brl(st.session_state.config['modules_init'] * st.session_state.config['cost_per_module'])}</div></div>", unsafe_allow_html=True)
         kpi_cols[1].markdown(f"<div class='kpi-gradient'><div class='small-muted'>Módulos Finais</div><div class='kpi-value'>{int(final['Módulos Ativos'])}</div></div>", unsafe_allow_html=True)
-        kpi_cols[2].markdown(f"<div class='kpi-card'><div class='small-muted'>Retiradas Acumuladas</div><div class='kpi-value'>{fmt_brl(final['Retiradas Acumuladas'])}</div></div>", unsafe_allow_html=True)
-        kpi_cols[3].markdown(f"<div class='kpi-gradient'><div class='small-muted'>Caixa Final</div><div class='kpi-value'>{fmt_brl(final['Caixa (Final Mês)'])}</div></div>", unsafe_allow_html=True)
+        kpi_cols[2].markdown(f"<div class='kpi-colored' style='background-color:{CHART_RETIRADAS_COLOR};'><div class='small-muted'>Retiradas Acumuladas</div><div class='kpi-value'>{fmt_brl(final['Retiradas Acumuladas'])}</div></div>", unsafe_allow_html=True)
+        kpi_cols[3].markdown(f"<div class='kpi-colored' style='background-color:{CHART_FUNDO_COLOR};'><div class='small-muted'>Fundo Acumulado</div><div class='kpi-value'>{fmt_brl(final['Fundo Acumulado'])}</div></div>", unsafe_allow_html=True)
+        kpi_cols[4].markdown(f"<div class='kpi-gradient'><div class='small-muted'>Caixa Final</div><div class='kpi-value'>{fmt_brl(final['Caixa (Final Mês)'])}</div></div>", unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
 
