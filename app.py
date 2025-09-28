@@ -6,18 +6,18 @@ import plotly.graph_objects as go
 from io import BytesIO
 
 # --- Cores personalizadas ---
-# Cor principal (Dorset Gold)
-BG_COLOR = "#C2A169" 
+# Cor principal (Diamante Lapidado, da imagem)
+BG_COLOR = "#EAE8E1" 
 # Cor para elementos de texto principal (preto)
 TEXT_COLOR = "#000000" 
 # Cor para detalhes/muted text (cinza escuro)
 MUTED_TEXT_COLOR = "#333333"
 # Cor para linhas de tabela
-TABLE_BORDER_COLOR = "#666666" 
-# Cor para o fundo da sidebar (um tom mais escuro ou complementar do BG_COLOR)
-SIDEBAR_BG = "#A68652" # Um marrom dourado que harmoniza
-# Cor dos cards internos (levemente transparente para não sumir no fundo)
-CARD_BG = f"rgba(255,255,255,0.2)" 
+TABLE_BORDER_COLOR = "#DCDCDC" # Um cinza mais claro para combinar com o fundo
+# Cor para o fundo da sidebar (um cinza escuro para contraste)
+SIDEBAR_BG = "#4A4A4A" 
+# Cor dos cards internos (sombra sutil em vez de branco)
+CARD_BG = f"rgba(0,0,0,0.03)" 
 
 # ---------------------------
 # CSS - Estilos da Página
@@ -27,18 +27,18 @@ st.markdown(
     f"""
     <style>
     :root{{
-      --g1: linear-gradient(90deg,#ff7a45,#ffc75f,#9acd32); /* Mantém gradiente existente */
-      --card-bg: {CARD_BG}; /* Fundo dos cards principais */
-      --sidebar-bg: {SIDEBAR_BG}; /* Fundo da sidebar */
-      --text-color: {TEXT_COLOR};
-      --muted-text-color: {MUTED_TEXT_COLOR};
-      --table-border-color: {TABLE_BORDER_COLOR};
+        --g1: linear-gradient(90deg,#ff7a45,#ffc75f,#9acd32); /* Mantém gradiente existente */
+        --card-bg: {CARD_BG}; /* Fundo dos cards principais */
+        --sidebar-bg: {SIDEBAR_BG}; /* Fundo da sidebar */
+        --text-color: {TEXT_COLOR};
+        --muted-text-color: {MUTED_TEXT_COLOR};
+        --table-border-color: {TABLE_BORDER_COLOR};
     }}
     
     /* --- Estilos Globais --- */
     .stApp {{ 
-      background-color: {BG_COLOR}; 
-      color: var(--text-color);
+        background-color: {BG_COLOR}; 
+        color: var(--text-color);
     }}
     
     /* --- Títulos e Subtítulos --- */
@@ -97,21 +97,21 @@ st.markdown(
 
     /* --- Cartões KPI --- */
     .kpi-card {{
-      background: var(--card-bg);
-      border-radius: 12px;
-      padding: 14px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-      border-left: 6px solid rgba(0,0,0,0.04);
-      color: var(--text-color); /* Garante texto preto */
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 14px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+        border-left: 6px solid rgba(0,0,0,0.04);
+        color: var(--text-color); /* Garante texto preto */
     }}
     .kpi-card .small-muted {{
         color: var(--muted-text-color); /* Garante texto cinza */
     }}
     .kpi-gradient {{
-      padding: 12px; border-radius: 12px;
-      background: var(--g1);
-      color: white; /* Texto dentro do gradiente continua branco para contraste */
-      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        padding: 12px; border-radius: 12px;
+        background: var(--g1);
+        color: white; /* Texto dentro do gradiente continua branco para contraste */
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     }}
     .kpi-gradient .small-muted {{
         color: rgba(255,255,255,0.8); /* Texto menor no gradiente mais claro */
@@ -119,19 +119,19 @@ st.markdown(
 
     /* --- Pills (tags) --- */
     .pill {{ 
-      display:inline-block; 
-      padding:6px 10px; 
-      border-radius:999px; 
-      font-size:12px; 
-      background:rgba(0,0,0,0.1); /* Fundo do 'pill' mais sutil e escuro */
-      color:#b94a00; /* Cor do texto da pill */
-      border:1px solid rgba(0,0,0,0.03); 
+        display:inline-block; 
+        padding:6px 10px; 
+        border-radius:999px; 
+        font-size:12px; 
+        background:rgba(0,0,0,0.1); /* Fundo do 'pill' mais sutil e escuro */
+        color:#b94a00; /* Cor do texto da pill */
+        border:1px solid rgba(0,0,0,0.03); 
     }}
 
     /* --- Tabelas (st.table e st.dataframe) --- */
     table, th, td {{ 
-      color: var(--text-color) !important; /* Força o texto da tabela a ser preto */
-      border-bottom: 1px solid var(--table-border-color); /* Linhas da tabela em cinza */
+        color: var(--text-color) !important; /* Força o texto da tabela a ser preto */
+        border-bottom: 1px solid var(--table-border-color); /* Linhas da tabela em cinza */
     }}
     thead th {{
         border-bottom: 2px solid var(--table-border-color); /* Cabeçalho da tabela com linha mais grossa */
