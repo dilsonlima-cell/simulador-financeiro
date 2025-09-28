@@ -15,7 +15,7 @@ KPI_GREEN = "#70AD47"
 KPI_BLUE = "#4472C4"
 KPI_RED = "#C00000"
 KPI_TEAL = "#2F75B5"
-CARD_COLOR = "#FFFFFF" # Mantido como variável Python para uso em Plotly e outros
+CARD_COLOR = "#FFFFFF"
 CHART_ORANGE = "#ED7D31"
 CHART_GRAY = "#A5A5A5"
 
@@ -26,14 +26,14 @@ st.markdown(f"""
         /* --- Variáveis do Tema Inspirado no Excel --- */
         :root {{
             --font-family: 'Calibri', sans-serif;
-            --color-bg: #EAEAEA; /* Cinza claro de fundo */
-            --color-card-bg: {CARD_COLOR}; /* Usando a variável Python para consistência */
+            --color-bg: #EAEAEA;
+            --color-card-bg: {CARD_COLOR};
             --color-text: #000000;
-            --color-header-bg: #44546A; /* Azul-acinzentado escuro do header */
+            --color-header-bg: #44546A;
             --color-header-text: #FFFFFF;
             --color-border: #D0D0D0;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.1);
-            --border-radius: 0px; /* Bordas retas como no Excel */
+            --border-radius: 0px;
+            --color-primary-action: #2F5597; /* Azul para botões principais */
         }}
 
         /* --- Estilos Globais --- */
@@ -45,7 +45,7 @@ st.markdown(f"""
         .main .block-container {{ 
             padding: 1.5rem 2rem; 
         }}
-        h1, h2, h3, h4, h5, h6, label, .st-emotion-cache-16idsys p, .st-emotion-cache-nahz7x p {{
+        h1, h2, h3, h4, h5, h6, label, .st-emotion-cache-16idsys p {{
             font-weight: 700 !important;
             color: var(--color-text) !important;
             font-family: var(--font-family);
@@ -58,7 +58,7 @@ st.markdown(f"""
         .excel-header {{
             background-color: var(--color-header-bg);
             padding: 0.5rem 2rem 0 2rem;
-            margin: -1.5rem -2rem 1.5rem -2rem; /* Puxa para as bordas e ajusta espaçamento */
+            margin: -1.5rem -2rem 1.5rem -2rem;
         }}
         .tabs-nav {{
             display: flex;
@@ -73,7 +73,7 @@ st.markdown(f"""
             background-color: #5F7897; /* Cor da aba inativa */
         }}
         .tabs-nav a.active {{
-            background-color: #2F5597; /* Cor da aba ativa */
+            background-color: var(--color-primary-action); /* Cor da aba ativa */
         }}
 
         /* --- Estilo dos KPIs Coloridos --- */
@@ -83,82 +83,34 @@ st.markdown(f"""
             border-radius: var(--border-radius);
             height: 100%;
         }}
-        .kpi-block-title {{
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            color: white; /* Força texto branco para contraste */
-        }}
-        .kpi-block-value {{
-            font-size: 2rem;
-            font-weight: 700;
-            color: white; /* Força texto branco para contraste */
-        }}
-
-        /* --- Ajustes para botões e informações (resolvendo fundos pretos) --- */
-        /* Botões */
-        .stButton button {{
-            background-color: #2F5597; /* Azul mais escuro, como a aba ativa */
+        .kpi-block-title, .kpi-block-value {{
             color: white;
-            border: 1px solid #2F5597;
-            border-radius: var(--border-radius);
-            padding: 0.5rem 1rem;
+            font-weight: 700;
+        }}
+        .kpi-block-title {{ font-size: 1rem; margin-bottom: 0.5rem; }}
+        .kpi-block-value {{ font-size: 2rem; }}
+
+        /* --- Estilos para Botões (Tema Claro) --- */
+        .stButton button {{
+            background-color: var(--color-card-bg);
+            color: var(--color-primary-action);
+            border: 1px solid var(--color-primary-action);
+            border-radius: 4px;
+            padding: 0.4rem 1rem;
             font-weight: 700;
         }}
         .stButton button:hover {{
-            background-color: #3B66A8; /* Um pouco mais claro no hover */
-            border-color: #3B66A8;
-            color: white;
+            background-color: #e9f2fc;
+            color: var(--color-primary-action);
+            border-color: var(--color-primary-action);
         }}
-        .stButton button:focus:not(:active) {{
-            border-color: #7AA2DA; /* Borda de foco */
-            box-shadow: none;
-            color: white;
-        }}
-        /* st.info - Ajusta o texto para ser legível */
-        .st-emotion-cache-nahz7x p {{ /* Seletor para o texto dentro do st.info */
-            color: var(--color-text) !important; /* Força a cor do texto padrão */
-        }}
-        .st-emotion-cache-nahz7x {{ /* Fundo do st.info */
-            background-color: #d1ecf1 !important; /* Cor de info padrão mais clara */
-            border-color: #bee5eb !important;
-            color: #0c5460 !important; /* Cor do texto padrão do info */
-            border-radius: 0px;
-        }}
-        /* st.warning (para o erro do NameError) */
-        .st-emotion-cache-1f06xja p {{
-            color: #721c24 !important; /* Texto mais escuro */
-        }}
-        .st-emotion-cache-1f06xja {{
-            background-color: #f8d7da !important; /* Fundo mais claro */
-            border-color: #f5c6cb !important;
-            border-radius: 0px;
-        }}
-        /* Container com borda */
-        .st-emotion-cache-1mds4y6 {{ /* Selector for st.container(border=True) */
-            background-color: var(--color-card-bg);
-            border: 1px solid var(--color-border);
+
+        /* --- Correção st.info --- */
+        [data-testid="stInfo"] {{
+            background-color: #d1ecf1;
             border-radius: var(--border-radius);
-            padding: 1rem;
-        }}
-        /* Text inputs, number inputs, selects, toggles */
-        .st-emotion-cache-eq1z3c, .st-emotion-cache-e3zps9, .st-emotion-cache-j7rqx1, .st-emotion-cache-1c7zf7t {{ /* General input styling */
-            background-color: white !important;
-            color: var(--color-text) !important;
-            border-radius: var(--border-radius);
-            border: 1px solid var(--color-border);
-        }}
-        .st-emotion-cache-1c7zf7t input[type="text"], .st-emotion-cache-1c7zf7t input[type="number"] {{
-            color: var(--color-text) !important;
-        }}
-        .st-emotion-cache-1c7zf7t > div > label {{ /* Label for toggle */
-            color: var(--color-text) !important;
-        }}
-        .st-emotion-cache-1c7zf7t .st-emotion-cache-uf99v8 {{ /* Toggle switch background */
-            background-color: var(--color-border) !important;
-        }}
-        .st-emotion-cache-1c7zf7t .st-emotion-cache-uf99v8[aria-checked="true"] {{
-            background-color: {KPI_BLUE} !important; /* Active toggle color */
+            border: 1px solid #bee5eb;
+            color: #0c5460;
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -171,7 +123,6 @@ def render_header_and_tabs():
     dashboard_class = "active" if active_page == "Dashboard" else ""
     planilhas_class = "active" if active_page == "Planilhas" else ""
     config_class = "active" if active_page == "Configurações" else ""
-
     st.markdown(f"""
         <header class="excel-header">
             <nav class="tabs-nav">
@@ -491,4 +442,115 @@ if st.session_state.active_page == 'Dashboard':
         st.info("👆 Selecione uma estratégia de simulação para visualizar os resultados.")
 
 # ---------------------------
-# PÁGIN
+# PÁGINA DE PLANILHAS (RELATÓRIOS)
+# ---------------------------
+if st.session_state.active_page == 'Planilhas':
+    st.title("Relatórios e Dados")
+    st.markdown("Explore os dados detalhados da simulação mês a mês.")
+    df_to_show = pd.DataFrame()
+    if not st.session_state.comparison_df.empty: df_to_show = st.session_state.comparison_df
+    elif not st.session_state.simulation_df.empty: df_to_show = st.session_state.simulation_df
+
+    if df_to_show.empty:
+        st.info("👈 Vá para a página 'Dashboard' para iniciar uma simulação.")
+    else:
+        df = df_to_show
+        main_cols = st.columns([6, 4])
+        with main_cols[0]:
+            with st.container(border=True):
+                st.subheader("Análise por Ponto no Tempo")
+                df_analysis = df
+                if 'Estratégia' in df.columns:
+                    selected_strategy = st.selectbox("Selecione a estratégia para análise:", df['Estratégia'].unique(), key="planilha_strat_select")
+                    df_analysis = df[df['Estratégia'] == selected_strategy].copy()
+                c1, c2 = st.columns(2)
+                anos_disponiveis = df_analysis['Ano'].unique()
+                selected_year = c1.selectbox("Selecione o ano", options=anos_disponiveis, key="planilha_year_select")
+                
+                months_in_year = df_analysis[df_analysis['Ano'] == selected_year]['Mês'].apply(lambda x: ((x - 1) % 12) + 1).unique()
+                selected_month_label = c2.selectbox("Selecione o mês", options=sorted(months_in_year), key="planilha_month_select")
+                
+                selected_month_abs_candidate = df_analysis[(df_analysis['Ano'] == selected_year) & (((df_analysis['Mês'] - 1) % 12) + 1 == selected_month_label)]
+                if not selected_month_abs_candidate.empty:
+                    data_point = selected_month_abs_candidate.iloc[0]
+                else:
+                    st.warning("Dados para o mês/ano selecionado não encontrados.")
+                    data_point = pd.Series({})
+
+                if not data_point.empty:
+                    st.markdown("---")
+                    res_cols = st.columns(2)
+                    with res_cols[0]:
+                        render_kpi_block("Total de Módulos", f"{int(data_point['Módulos Ativos'])}", CHART_GRAY)
+                        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                        render_kpi_block("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']), KPI_GREEN)
+                    with res_cols[1]:
+                        render_kpi_block("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']), KPI_YELLOW)
+                        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                        render_kpi_block("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']), KPI_BLUE)
+                else:
+                    st.markdown("---")
+                    st.info("Nenhum dado para exibir para o mês selecionado.")
+
+
+        with main_cols[1]:
+            with st.container(border=True):
+                st.subheader("Resumo Gráfico do Mês")
+                if not data_point.empty:
+                    chart_data = pd.DataFrame({"Categoria": ["Receita", "Gastos", "Retirada", "Fundo"],"Valor": [data_point['Receita'],data_point['Gastos'],data_point['Retirada (Mês)'],data_point['Fundo (Mês)']]})
+                    fig_monthly = px.bar(chart_data, x="Categoria", y="Valor", text_auto='.2s', color="Categoria", color_discrete_map={"Receita": KPI_GREEN, "Gastos": CHART_ORANGE, "Retirada": KPI_RED, "Fundo": KPI_TEAL})
+                    fig_monthly.update_layout(showlegend=False, height=450, plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR, font_family="Calibri")
+                    st.plotly_chart(fig_monthly, use_container_width=True)
+                else:
+                    st.info("Selecione um mês válido para ver o resumo.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.subheader("Tabela Completa da Simulação")
+            df_display_base = df
+            if 'Estratégia' in df.columns:
+                st.markdown(f"Mostrando dados da estratégia: **{selected_strategy}**")
+                df_display_base = df_analysis
+            
+            all_columns = df_display_base.columns.tolist()
+            if 'Estratégia' in all_columns: all_columns.remove('Estratégia')
+            default_cols = ['Mês', 'Ano', 'Módulos Ativos', 'Receita', 'Gastos', 'Caixa (Final Mês)', 'Patrimônio Líquido']
+            
+            if not st.session_state.column_visibility or set(st.session_state.column_visibility.keys()) != set(all_columns):
+                st.session_state.column_visibility = {col: (col in default_cols) for col in all_columns}
+            
+            with st.expander("Exibir/Ocultar Colunas da Tabela"):
+                toggle_cols = st.columns(4)
+                for i, col_name in enumerate(all_columns):
+                    with toggle_cols[i % 4]:
+                        st.session_state.column_visibility[col_name] = st.toggle(col_name, value=st.session_state.column_visibility.get(col_name, False), key=f"toggle_{col_name}")
+            
+            cols_to_show = [col for col, is_visible in st.session_state.column_visibility.items() if is_visible]
+            
+            page_size = 12
+            total_pages = (len(df_display_base) - 1) // page_size + 1 if len(df_display_base) > 0 else 1
+            if 'page' not in st.session_state: st.session_state.page = 0
+            if st.session_state.page >= total_pages: st.session_state.page = 0
+            start_idx = st.session_state.page * page_size
+            end_idx = start_idx + page_size
+            df_display = df_display_base.iloc[start_idx:end_idx].copy()
+            
+            format_cols = ["Receita", "Manutenção", "Aluguel", "Parcelas Terrenos (Novos)", "Aporte", "Fundo (Mês)", "Retirada (Mês)", "Caixa (Final Mês)", "Investimento Total Acumulado", "Fundo Acumulado", "Retiradas Acumuladas", "Patrimônio Líquido", "Gastos"]
+            for col in format_cols:
+                if col in df_display.columns:
+                    df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
+            
+            if cols_to_show:
+                st.dataframe( df_display[cols_to_show], use_container_width=True, hide_index=True )
+            else:
+                st.warning("Selecione ao menos uma coluna para exibir os dados.")
+
+            page_cols = st.columns([1, 1, 8])
+            if page_cols[0].button("Anterior", disabled=(st.session_state.page == 0), key="prev_page_btn"):
+                st.session_state.page -= 1; st.rerun()
+            if page_cols[1].button("Próxima", disabled=(st.session_state.page >= total_pages - 1), key="next_page_btn"):
+                st.session_state.page += 1; st.rerun()
+            page_cols[2].markdown(f"<div style='padding-top:10px;'>Página {st.session_state.page + 1} de {total_pages}</div>", unsafe_allow_html=True)
+
+            excel_bytes = df_to_excel_bytes(df)
+            st.download_button( "📥 Baixar Relatório Completo (Excel)", data=excel_bytes, file_name="relatorio_simulacao.xlsx", key="download_excel_btn")
