@@ -74,16 +74,22 @@ def create_annual_summary(df: pd.DataFrame):
     return annual_df[['Ano', 'Módulos (Final Ano)', 'Receita', 'Manutenção', 'Aluguel', 'Aporte', 'Retirada (Ano)', 'Fundo (Ano)', 'Módulos Comprados no Ano', 'Caixa (Final Ano)']]
 
 def simulate(config):
-    years, modules_init, cost_per_module, cost_correction_rate, revenue_per_module, maintenance_per_module, rent_value, rent_start_month, max_withdraw_value, aportes, retiradas, fundos, land_total_value, land_down_payment_pct, land_installments = (
-        config['years'], config['modules_init'], config['cost_per_module'], config['cost_correction_rate'], config['revenue_per_module'], config['maintenance_per_module'],
+    # Extrai todos os parâmetros da configuração
+    years, modules_rented_init, modules_owned_init, cost_per_module, cost_correction_rate, revenue_per_module, maintenance_per_module, rent_value, rent_start_month, max_withdraw_value, aportes, retiradas, fundos, land_total_value, land_down_payment_pct, land_installments = (
+        config['years'], config['modules_rented_init'], config['modules_owned_init'], config['cost_per_module'], config['cost_correction_rate'], config['revenue_per_module'], config['maintenance_per_module'],
         config['rent_value'], config['rent_start_month'], config['max_withdraw_value'], config['aportes'], config['retiradas'], config['fundos'],
         config['land_total_value'], config['land_down_payment_pct'], config['land_installments']
     )
     months = years * 12
     rows = []
-    modules = modules_init
+    
+    # Inicia contadores de módulos
+    modules_rented = modules_rented_init
+    modules_owned = modules_owned_init
+    
     caixa = 0.0
-    investimento_total = modules * cost_per_module
+    # Investimento total inicial considera módulos + entrada do terreno
+    investimento_total = (modules_rented + modules_owned) * cost_per_module
     fundo_ac = 0.0
     retiradas_ac = 0.0
     custo_modulo_atual = cost_per_module
@@ -95,12 +101,16 @@ def simulate(config):
         valor_entrada_terreno = land_total_value * (land_down_payment_pct / 100.0)
         valor_financiado = land_total_value - valor_entrada_terreno
         valor_parcela_terreno = valor_financiado / land_installments if land_installments > 0 else 0
-        investimento_total += valor_entrada_terreno # Entrada conta como investimento inicial
+        investimento_total += valor_entrada_terreno
 
     for m in range(1, months + 1):
-        receita = modules * revenue_per_module
-        manut = modules * maintenance_per_module
+        modules_total = modules_rented + modules_owned
+        receita = modules_total * revenue_per_module
+        manut = modules_total * maintenance_per_module
+        
+        # Aluguel é fixo e começa em um mês específico
         aluguel = rent_value if m >= rent_start_month else 0.0
+        
         novos_modulos_comprados = 0
         aporte_mes = aportes_map.get(m, 0.0)
         caixa += aporte_mes
@@ -111,7 +121,7 @@ def simulate(config):
         parcela_terreno_mes = 0.0
         if land_total_value > 0 and m <= land_installments:
             parcela_terreno_mes = valor_parcela_terreno
-            investimento_total += valor_parcela_terreno # Cada parcela é um novo aporte de capital
+            investimento_total += valor_parcela_terreno
         
         if m == 1:
             caixa -= valor_entrada_terreno
@@ -145,13 +155,14 @@ def simulate(config):
                 novos_modulos_comprados = int(caixa // custo_modulo_atual)
                 custo_da_compra = novos_modulos_comprados * custo_modulo_atual
                 caixa -= custo_da_compra
-                modules += novos_modulos_comprados
+                # Novos módulos são adicionados como próprios
+                modules_owned += novos_modulos_comprados
                 investimento_total += custo_da_compra
             custo_modulo_atual *= (1 + cost_correction_rate / 100.0)
             
-        patrimonio_liquido = (modules * custo_modulo_atual) + caixa + fundo_ac + land_total_value
+        patrimonio_liquido = ((modules_owned + modules_rented) * custo_modulo_atual) + caixa + fundo_ac + land_total_value
 
-        rows.append({"Mês": m, "Ano": (m - 1) // 12 + 1, "Módulos Ativos": modules, "Receita": receita, "Manutenção": manut, "Aluguel": aluguel, "Gastos": manut + aluguel, "Aporte": aporte_mes, "Fundo (Mês)": fundo_mes_total, "Retirada (Mês)": retirada_mes_efetiva, "Caixa (Final Mês)": caixa, "Investimento Total Acumulado": investimento_total, "Fundo Acumulado": fundo_ac, "Retiradas Acumuladas": retiradas_ac, "Módulos Comprados no Ano": novos_modulos_comprados, "Custo Módulo (Próx. Ano)": custo_modulo_atual if m % 12 == 0 else np.nan, "Patrimônio Líquido": patrimonio_liquido})
+        rows.append({"Mês": m, "Ano": (m - 1) // 12 + 1, "Módulos Ativos": modules_owned + modules_rented, "Módulos Alugados": modules_rented, "Módulos Próprios": modules_owned, "Receita": receita, "Manutenção": manut, "Aluguel": aluguel, "Gastos": manut + aluguel, "Aporte": aporte_mes, "Fundo (Mês)": fundo_mes_total, "Retirada (Mês)": retirada_mes_efetiva, "Caixa (Final Mês)": caixa, "Investimento Total Acumulado": investimento_total, "Fundo Acumulado": fundo_ac, "Retiradas Acumuladas": retiradas_ac, "Módulos Comprados no Ano": novos_modulos_comprados, "Custo Módulo (Próx. Ano)": custo_modulo_atual if m % 12 == 0 else np.nan, "Patrimônio Líquido": patrimonio_liquido})
     
     df = pd.DataFrame(rows)
     df["Custo Módulo (Próx. Ano)"] = df["Custo Módulo (Próx. Ano)"].ffill()
@@ -161,7 +172,7 @@ def simulate(config):
 # Inicialização e Gerenciamento do Estado
 # ---------------------------
 def get_default_config():
-    return {'years': 15, 'modules_init': 1, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0, 'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0, 'rent_value': 750.0, 'rent_start_month': 23, 'max_withdraw_value': 50000.0, 'aportes': [{"mes": 3, "valor": 0.0}], 'retiradas': [{"mes": 25, "percentual": 30.0}], 'fundos': [{"mes": 25, "percentual": 10.0}], 'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120}
+    return {'years': 15, 'modules_rented_init': 1, 'modules_owned_init': 0, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0, 'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0, 'rent_value': 750.0, 'rent_start_month': 1, 'max_withdraw_value': 50000.0, 'aportes': [{"mes": 3, "valor": 0.0}], 'retiradas': [{"mes": 25, "percentual": 30.0}], 'fundos': [{"mes": 25, "percentual": 10.0}], 'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120}
 
 if 'config' not in st.session_state: st.session_state.config = get_default_config()
 if 'simulation_df' not in st.session_state: st.session_state.simulation_df = pd.DataFrame()
@@ -190,6 +201,7 @@ if st.session_state.active_page == 'Configurações':
         st.rerun()
     if action_cols[1].button("🚀 Simulação Ativa", type="primary"):
         with st.spinner("Calculando simulação..."):
+            st.session_state.config['modules_init'] = st.session_state.config['modules_rented_init'] + st.session_state.config['modules_owned_init']
             st.session_state.simulation_df = simulate(st.session_state.config)
         st.success("Simulação concluída! Verifique as outras abas.")
     
@@ -198,12 +210,14 @@ if st.session_state.active_page == 'Configurações':
         c1, c2 = st.columns(2)
         with c1:
             st.session_state.config['years'] = st.number_input("Horizonte de investimento (anos)", 1, 30, st.session_state.config['years'])
+            st.session_state.config['modules_rented_init'] = st.number_input("Módulos iniciais (terreno alugado)", 0, value=st.session_state.config['modules_rented_init'])
             st.session_state.config['cost_per_module'] = st.number_input("Custo inicial por módulo (R$)", 0.0, value=st.session_state.config['cost_per_module'], format="%.2f")
             st.session_state.config['revenue_per_module'] = st.number_input("Receita mensal por módulo (R$)", 0.0, value=st.session_state.config['revenue_per_module'], format="%.2f")
             st.session_state.config['max_withdraw_value'] = st.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=st.session_state.config['max_withdraw_value'], format="%.2f", help="Quando a retirada baseada em % atingir este valor, o restante irá para o fundo de reserva. Deixe em 0 para desativar.")
         with c2:
-            st.session_state.config['modules_init'] = st.number_input("Módulos iniciais", 1, value=st.session_state.config['modules_init'])
             st.session_state.config['cost_correction_rate'] = st.number_input("Correção anual do custo do módulo (%)", 0.0, value=st.session_state.config['cost_correction_rate'], format="%.1f")
+            st.session_state.config['modules_owned_init'] = st.number_input("Módulos iniciais (terreno próprio)", 0, value=st.session_state.config['modules_owned_init'])
+            st.metric("Total de Módulos Iniciais", st.session_state.config['modules_rented_init'] + st.session_state.config['modules_owned_init'])
             st.session_state.config['maintenance_per_module'] = st.number_input("Manutenção mensal por módulo (R$)", 0.0, value=st.session_state.config['maintenance_per_module'], format="%.2f")
     
     with st.container(border=True):
@@ -224,7 +238,7 @@ if st.session_state.active_page == 'Configurações':
     with st.container(border=True):
         st.subheader("Custos Fixos")
         c1, c2 = st.columns(2)
-        with c1: st.session_state.config['rent_value'] = st.number_input("Aluguel mensal do terreno (R$)", 0.0, value=st.session_state.config['rent_value'], format="%.2f")
+        with c1: st.session_state.config['rent_value'] = st.number_input("Aluguel mensal fixo (R$)", 0.0, value=st.session_state.config['rent_value'], format="%.2f", help="Custo de aluguel para os módulos em terreno alugado.")
         with c2: st.session_state.config['rent_start_month'] = st.number_input("Mês de início do aluguel", 1, st.session_state.config['years']*12, st.session_state.config['rent_start_month'])
 
     with st.container(border=True):
@@ -278,6 +292,19 @@ if st.session_state.active_page == 'Dashboard':
         st.markdown("<br>", unsafe_allow_html=True)
 
         with st.container(border=True):
+            st.subheader("Composição e Crescimento dos Módulos")
+            max_months_comp = len(df)
+            periodo_comp = st.slider("Selecione o período (meses)", 1, max_months_comp, (1, max_months_comp), key="composicao_slider")
+            df_comp = df[(df['Mês'] >= periodo_comp[0]) & (df['Mês'] <= periodo_comp[1])]
+            fig_comp = go.Figure()
+            fig_comp.add_trace(go.Scatter(x=df_comp['Mês'], y=df_comp['Módulos Próprios'], name='Próprios', stackgroup='one', line=dict(color=CHART_MODULOS_COLOR)))
+            fig_comp.add_trace(go.Scatter(x=df_comp['Mês'], y=df_comp['Módulos Alugados'], name='Alugados', stackgroup='one', line=dict(color=KPI_INVESTIMENTO_COLOR)))
+            fig_comp.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='white', paper_bgcolor='white')
+            st.plotly_chart(fig_comp, use_container_width=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        with st.container(border=True):
             st.subheader("Evolução do Patrimônio vs Investimento")
             max_months_pat = len(df)
             periodo_pat = st.slider("Selecione o período (meses)", 1, max_months_pat, (1, max_months_pat), key="patrimonio_slider")
@@ -287,32 +314,7 @@ if st.session_state.active_page == 'Dashboard':
             fig_pat.add_trace(go.Scatter(x=df_pat["Mês"], y=df_pat["Investimento Total Acumulado"], name="Investimento Total", line=dict(color=KPI_INVESTIMENTO_COLOR, width=2.5)))
             fig_pat.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='white', paper_bgcolor='white')
             st.plotly_chart(fig_pat, use_container_width=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        chart_cols = st.columns(2)
-        with chart_cols[0]:
-            with st.container(border=True):
-                st.subheader("Evolução Financeira (Componentes do Patrimônio)")
-                max_months = len(df)
-                periodo_evolucao = st.slider("Selecione o período (meses)", 1, max_months, (1, max_months), key="evolucao_slider")
-                df_evolucao = df[(df['Mês'] >= periodo_evolucao[0]) & (df['Mês'] <= periodo_evolucao[1])]
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df_evolucao["Mês"], y=df_evolucao["Caixa (Final Mês)"], name="Caixa", line=dict(color=CHART_CAIXA_COLOR, width=2.5)))
-                fig.add_trace(go.Scatter(x=df_evolucao["Mês"], y=df_evolucao["Fundo Acumulado"], name="Fundo", line=dict(color=CHART_FUNDO_COLOR, width=1.5)))
-                fig.add_trace(go.Scatter(x=df_evolucao["Mês"], y=df_evolucao["Retiradas Acumuladas"], name="Retiradas", line=dict(color=CHART_RETIRADAS_COLOR, width=1.5)))
-                fig.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='white', paper_bgcolor='white')
-                st.plotly_chart(fig, use_container_width=True)
-        with chart_cols[1]:
-            with st.container(border=True):
-                st.subheader("Crescimento dos Módulos")
-                max_months_mod = len(df)
-                periodo_modulos = st.slider("Selecione o período (meses)", 1, max_months_mod, (1, max_months_mod), key="modulos_slider")
-                df_modulos = df[(df['Mês'] >= periodo_modulos[0]) & (df['Mês'] <= periodo_modulos[1])]
-                fig_mod = go.Figure(go.Scatter(x=df_modulos["Mês"], y=df_modulos["Módulos Ativos"], name="Módulos", line=dict(color=CHART_MODULOS_COLOR, width=2.5), fill='tozeroy'))
-                fig_mod.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), plot_bgcolor='white', paper_bgcolor='white')
-                st.plotly_chart(fig_mod, use_container_width=True)
-
+            
 # PÁGINA DE PLANILHAS
 if st.session_state.active_page == 'Planilhas':
     st.title("Planilhas Demonstrativas")
@@ -338,10 +340,10 @@ if st.session_state.active_page == 'Planilhas':
             st.markdown("---")
             
             res_cols = st.columns(2)
-            res_cols[0].metric("Módulos Ativos", f"{int(data_point['Módulos Ativos'])}")
+            res_cols[0].metric("Total de Módulos", f"{int(data_point['Módulos Ativos'])} ({int(data_point['Módulos Alugados'])} Alug. / {int(data_point['Módulos Próprios'])} Próp.)")
             res_cols[0].metric("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']))
-            res_cols[1].metric("Fundo Acumulado", fmt_brl(data_point['Fundo Acumulado']))
-            res_cols[1].metric("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']))
+            res_cols[1].metric("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']))
+            res_cols[1].metric("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']))
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -352,11 +354,12 @@ if st.session_state.active_page == 'Planilhas':
             start_idx = st.session_state.page * page_size
             end_idx = start_idx + page_size
             df_display = df.iloc[start_idx:end_idx].copy()
-            format_cols = ["Receita", "Manutenção", "Aluguel", "Aporte", "Fundo (Mês)", "Retirada (Mês)", "Caixa (Final Mês)", "Investimento Total Acumulado", "Fundo Acumulado", "Retiradas Acumuladas", "Custo Módulo (Próx. Ano)"]
+            # Adiciona novas colunas ao display
+            format_cols = ["Receita", "Manutenção", "Aluguel", "Aporte", "Fundo (Mês)", "Retirada (Mês)", "Caixa (Final Mês)", "Investimento Total Acumulado", "Fundo Acumulado", "Retiradas Acumuladas", "Custo Módulo (Próx. Ano)", "Patrimônio Líquido"]
             for col in format_cols:
                 if col in df_display.columns:
                     df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_display[['Mês', 'Ano', 'Módulos Ativos', 'Módulos Alugados', 'Módulos Próprios', 'Receita', 'Gastos', 'Caixa (Final Mês)', 'Investimento Total Acumulado', 'Patrimônio Líquido']], use_container_width=True, hide_index=True)
             page_cols = st.columns([1, 1, 8])
             if page_cols[0].button("Anterior", disabled=(st.session_state.page == 0)):
                 st.session_state.page -= 1; st.rerun()
