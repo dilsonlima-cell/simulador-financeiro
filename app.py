@@ -16,8 +16,12 @@ st.markdown(
       --g1: linear-gradient(90deg,#ff7a45,#ffc75f,#9acd32);
       --card-bg: rgba(255,255,255,0.95);
     }
-    .stApp { background: linear-gradient(180deg, #FFF 0%, #FFF7F0 100%); }
-    .header-title { font-weight:700; font-size:28px; margin:0; }
+    /* CORREÇÃO APLICADA AQUI */
+    .stApp { 
+      background: linear-gradient(180deg, #FFF 0%, #FFF7F0 100%); 
+      color: #31333F; /* Define a cor padrão do texto para escuro */
+    }
+    .header-title { font-weight:700; font-size:28px; margin:0; color: #111; }
     .subhead { color: #555; margin-top:4px; margin-bottom:8px; }
     .kpi-card {
       background: var(--card-bg);
@@ -29,13 +33,17 @@ st.markdown(
     .kpi-gradient {
       padding: 12px; border-radius: 12px;
       background: var(--g1);
-      color: white;
+      color: white; /* O texto dentro do gradiente continua branco */
       box-shadow: 0 6px 18px rgba(15,23,42,0.08);
     }
     .small-muted { color:#666; font-size:13px; }
     .pill { display:inline-block; padding:6px 10px; border-radius:999px; font-size:12px; background:#fff7ea; color:#b94a00; border:1px solid rgba(0,0,0,0.03); }
     table { border-collapse: collapse; width:100%;}
     th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size:13px;}
+    /* Garante que os cabeçalhos também fiquem escuros */
+    h1, h2, h3, h4, h5, h6 {
+        color: #111;
+    }
     </style>
     """, unsafe_allow_html=True
 )
@@ -53,7 +61,7 @@ def df_to_excel_bytes(df: pd.DataFrame):
     return output.getvalue()
 
 # ---------------------------
-# Lógica da Simulação (Atualizada)
+# Lógica da Simulação
 # ---------------------------
 def simulate(
     years: int,
@@ -93,17 +101,15 @@ def simulate(
 
         caixa += receita - manut - aluguel
 
-        # --- LÓGICA DO FUNDO DE RESERVA (AGORA EM %) ---
         fundo_mes_total = 0.0
         if caixa > 0:
             for f in fundos:
                 if m >= f["mes"]:
                     valor_fundo = caixa * (f["percentual"] / 100.0)
-                    caixa -= valor_fundo  # Reduz o caixa antes das retiradas
+                    caixa -= valor_fundo
                     fundo_mes_total += valor_fundo
         fundo_ac += fundo_mes_total
         
-        # --- LÓGICA DAS RETIRADAS ---
         retirada_mes_total = 0.0
         if caixa > 0:
             for r in retiradas:
@@ -113,7 +119,6 @@ def simulate(
                     retirada_mes_total += valor_retirada
         retiradas_ac += retirada_mes_total
 
-        # --- LÓGICA DE REINVESTIMENTO ANUAL ---
         if m % 12 == 0:
             if caixa >= custo_modulo_atual:
                 novos_modulos_comprados = int(caixa // custo_modulo_atual)
@@ -169,7 +174,6 @@ with st.sidebar:
         st.session_state.aportes = [{"mes": 3, "valor": 50_000.0}]
     if "retiradas" not in st.session_state:
         st.session_state.retiradas = [{"mes": 25, "percentual": 30.0}]
-    # ATUALIZADO: Fundo agora usa 'percentual'
     if "fundos" not in st.session_state:
         st.session_state.fundos = [{"mes": 25, "percentual": 10.0}]
 
@@ -193,7 +197,6 @@ with st.sidebar:
         if st.button("Adicionar Retirada"):
             st.session_state.retiradas.append({"mes": 1, "percentual": 10.0}); st.rerun()
 
-    # ATUALIZADO: Expander do Fundo de Reserva agora pede percentual
     with st.expander("Fundos de Reserva (% sobre o caixa mensal)"):
         for i, f in enumerate(st.session_state.fundos):
             c1, c2, c3 = st.columns([1,2,1])
@@ -245,24 +248,20 @@ with colB:
 
 st.markdown("---")
 
-# --- ATUALIZADO: Resumo Consolidado com seleção de Ano e Mês ---
 st.subheader("Resumo Consolidado por Ponto no Tempo")
 col_res1, col_res2, col_res3 = st.columns([1, 1, 2])
 
 with col_res1:
     summary_year = st.number_input("Selecione o ano", 1, years, min(5, years), 1)
 with col_res2:
-    # O mês 12 corresponde ao índice 11
     summary_month = st.selectbox("E o mês", list(range(1, 13)), index=11)
 
 def get_summary_for_point_in_time(df, year, month):
     target_month = (year - 1) * 12 + month
-    # Garante que não tentaremos acessar um mês que não existe na simulação
     if target_month > len(df):
         target_month = len(df)
         
     data = df[df["Mês"] == target_month].iloc[0]
-    # Recalcula o ano e mês caso tenhamos ajustado o target_month
     actual_year = (data['Mês'] - 1) // 12 + 1
     actual_month = (data['Mês'] - 1) % 12 + 1
     
@@ -277,10 +276,8 @@ def get_summary_for_point_in_time(df, year, month):
 
 with col_res3:
     summary_data = []
-    # Adiciona o resumo para o ponto selecionado
     summary_data.append(get_summary_for_point_in_time(df, summary_year, summary_month))
     
-    # Adiciona o resumo do ponto final, se for diferente do selecionado
     final_month_in_sim = years * 12
     selected_month_in_sim = (summary_year - 1) * 12 + summary_month
     if selected_month_in_sim != final_month_in_sim:
