@@ -5,60 +5,174 @@ import numpy as np
 import plotly.graph_objects as go
 from io import BytesIO
 
+# --- Cores personalizadas ---
+# Cor principal (Dorset Gold)
+BG_COLOR = "#C2A169" 
+# Cor para elementos de texto principal (preto)
+TEXT_COLOR = "#000000" 
+# Cor para detalhes/muted text (cinza escuro)
+MUTED_TEXT_COLOR = "#333333"
+# Cor para linhas de tabela
+TABLE_BORDER_COLOR = "#666666" 
+# Cor para o fundo da sidebar (um tom mais escuro ou complementar do BG_COLOR)
+SIDEBAR_BG = "#A68652" # Um marrom dourado que harmoniza
+# Cor dos cards internos (levemente transparente para não sumir no fundo)
+CARD_BG = f"rgba(255,255,255,0.2)" 
+
 # ---------------------------
 # CSS - Estilos da Página
 # ---------------------------
 st.set_page_config(page_title="Simulador Financeiro Modular", layout="wide", initial_sidebar_state="expanded")
 st.markdown(
-    """
+    f"""
     <style>
-    :root{
-      --g1: linear-gradient(90deg,#ff7a45,#ffc75f,#9acd32);
-      /* Cor de fundo do cartão KPI mantida clara para contraste */
-      --card-bg: rgba(255,255,255,0.85); 
-    }
+    :root{{
+      --g1: linear-gradient(90deg,#ff7a45,#ffc75f,#9acd32); /* Mantém gradiente existente */
+      --card-bg: {CARD_BG}; /* Fundo dos cards principais */
+      --sidebar-bg: {SIDEBAR_BG}; /* Fundo da sidebar */
+      --text-color: {TEXT_COLOR};
+      --muted-text-color: {MUTED_TEXT_COLOR};
+      --table-border-color: {TABLE_BORDER_COLOR};
+    }}
     
-    /* --- ALTERAÇÕES DE COR APLICADAS AQUI --- */
-    .stApp { 
-      background-color: #FBE2AD; /* Nova cor de fundo baseada na imagem */
-      color: #000000;             /* Cor padrão do texto definida para preto */
-    }
+    /* --- Estilos Globais --- */
+    .stApp {{ 
+      background-color: {BG_COLOR}; 
+      color: var(--text-color);
+    }}
     
-    .header-title, h1, h2, h3, h4, h5, h6 {
-        color: #000000; /* Todos os títulos em preto */
-    }
-    .subhead { 
-        color: #333333; /* Subtítulo em cinza escuro para hierarquia sutil */
-    }
-    .kpi-card {
+    /* --- Títulos e Subtítulos --- */
+    .header-title, h1, h2, h3, h4, h5, h6 {{
+        color: var(--text-color);
+    }}
+    .subhead {{ 
+        color: var(--muted-text-color);
+    }}
+
+    /* --- Sidebar --- */
+    [data-testid="stSidebar"] {{
+        background-color: var(--sidebar-bg);
+        color: white; /* Texto na sidebar geralmente mais claro */
+    }}
+    [data-testid="stSidebar"] .stMarkdown > div > div > strong {{
+        color: white; /* Título principal da sidebar */
+    }}
+    [data-testid="stSidebar"] .stMarkdown > div > div > div {{
+        color: rgba(255,255,255,0.8); /* Subtítulo da sidebar */
+    }}
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h4,
+    [data-testid="stSidebar"] h5, [data-testid="stSidebar"] h6 {{
+        color: white; /* Headers na sidebar */
+    }}
+    [data-testid="stSidebar"] label {{
+        color: white; /* Labels dos inputs na sidebar */
+    }}
+    /* Ajustes para inputs na sidebar */
+    [data-testid="stSidebar"] input, 
+    [data-testid="stSidebar"] .stSelectbox {{
+        background-color: rgba(255,255,255,0.1);
+        color: white;
+    }}
+    [data-testid="stSidebar"] input[type="number"], 
+    [data-testid="stSidebar"] .stSelectbox > div > div > div {{
+        color: white; /* Garante que o texto de números e selects na sidebar seja branco */
+    }}
+    /* Setas dos number_input */
+    [data-testid="stSidebar"] button[kind="secondary"] {{
+        background-color: rgba(255,255,255,0.1);
+        color: white;
+    }}
+    /* Botões "Adicionar" e "Remover" na sidebar */
+    [data-testid="stSidebar"] .stButton > button {{
+        background-color: #666; /* Botões escuros na sidebar */
+        color: white;
+        border: none;
+    }}
+    [data-testid="stSidebar"] .stButton > button:hover {{
+        background-color: #777;
+        color: white;
+    }}
+
+
+    /* --- Cartões KPI --- */
+    .kpi-card {{
       background: var(--card-bg);
       border-radius: 12px;
       padding: 14px;
       box-shadow: 0 6px 18px rgba(0,0,0,0.06);
       border-left: 6px solid rgba(0,0,0,0.04);
-    }
-    .kpi-gradient {
+      color: var(--text-color); /* Garante texto preto */
+    }}
+    .kpi-card .small-muted {{
+        color: var(--muted-text-color); /* Garante texto cinza */
+    }}
+    .kpi-gradient {{
       padding: 12px; border-radius: 12px;
       background: var(--g1);
       color: white; /* Texto dentro do gradiente continua branco para contraste */
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-    }
-    .small-muted { 
-        color:#555555; /* Texto menor em cinza escuro */
-    }
-    .pill { 
+    }}
+    .kpi-gradient .small-muted {{
+        color: rgba(255,255,255,0.8); /* Texto menor no gradiente mais claro */
+    }}
+
+    /* --- Pills (tags) --- */
+    .pill {{ 
       display:inline-block; 
       padding:6px 10px; 
       border-radius:999px; 
       font-size:12px; 
-      background:rgba(255,255,255,0.5); /* Fundo do 'pill' mais sutil */
-      color:#b94a00; 
+      background:rgba(0,0,0,0.1); /* Fundo do 'pill' mais sutil e escuro */
+      color:#b94a00; /* Cor do texto da pill */
       border:1px solid rgba(0,0,0,0.03); 
-    }
-    table, th, td { 
-      color: #000000 !important; /* Força o texto da tabela a ser preto */
-      border-bottom: 1px solid #ddd;
-    }
+    }}
+
+    /* --- Tabelas (st.table e st.dataframe) --- */
+    table, th, td {{ 
+      color: var(--text-color) !important; /* Força o texto da tabela a ser preto */
+      border-bottom: 1px solid var(--table-border-color); /* Linhas da tabela em cinza */
+    }}
+    thead th {{
+        border-bottom: 2px solid var(--table-border-color); /* Cabeçalho da tabela com linha mais grossa */
+    }}
+    /* Para o st.dataframe especificamente */
+    .stDataFrame > div > div > div > div > div > div {{
+        background-color: transparent !important; /* Remove fundo branco do dataframe */
+        color: var(--text-color) !important;
+    }}
+    .stDataFrame thead th {{
+        background-color: rgba(0,0,0,0.05) !important; /* Leve sombreamento no cabeçalho do dataframe */
+        color: var(--text-color) !important;
+    }}
+    .stDataFrame tbody tr {{
+        background-color: transparent !important;
+    }}
+    .stDataFrame tbody tr:nth-child(even) {{
+        background-color: rgba(0,0,0,0.02) !important; /* Linhas zebradas sutis */
+    }}
+    .stDataFrame .css-x1y8h7 {{ /* Ícone de ordenação */
+        color: var(--text-color) !important;
+    }}
+
+    /* --- Elementos de formulário (inputs, selects, sliders) --- */
+    label {{
+        color: var(--text-color); /* Labels dos inputs */
+    }}
+    /* Estilo para inputs e selects no corpo principal */
+    .stNumberInput, .stSelectbox {{
+        background-color: var(--card-bg); /* Usa o card-bg para inputs */
+        border-radius: 8px;
+        padding: 5px;
+    }}
+    .stNumberInput input, .stSelectbox > div > div > div {{
+        color: var(--text-color);
+    }}
+    /* Cor dos botões de incremento/decremento dos number_input */
+    .stNumberInput button[kind="secondary"] {{
+        background-color: rgba(0,0,0,0.1);
+        color: var(--text-color);
+    }}
     </style>
     """, unsafe_allow_html=True
 )
@@ -94,7 +208,6 @@ def simulate(
     months = years * 12
     rows = []
     
-    # --- Estado inicial da simulação ---
     modules = modules_init
     caixa = 0.0
     investimento_total = modules * cost_per_module
@@ -103,7 +216,6 @@ def simulate(
     custo_modulo_atual = cost_per_module
     aportes_map = {a["mes"]: a.get("valor", 0.0) for a in aportes}
 
-    # --- Loop mensal da simulação ---
     for m in range(1, months + 1):
         receita = modules * revenue_per_module
         manut = modules * maintenance_per_module
@@ -162,7 +274,7 @@ def simulate(
 # Sidebar - Entradas do Usuário
 # ---------------------------
 with st.sidebar:
-    st.markdown("<div style='display:flex; gap:10px; align-items:center'><div style='width:48px;height:48px;border-radius:10px;background:var(--g1)'></div><div><strong>Simulador Modular</strong><div style='font-size:12px;color:#444'>Projeção com reinvestimento</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div style='display:flex; gap:10px; align-items:center'><div style='width:48px;height:48px;border-radius:10px;background:var(--g1)'></div><div><strong>Simulador Modular</strong><div style='font-size:12px;'>Projeção com reinvestimento</div></div></div>", unsafe_allow_html=True)
     st.markdown("---")
     st.header("1. Configuração Geral")
     years = st.slider("Horizonte de investimento (anos)", 1, 30, 10)
@@ -251,14 +363,34 @@ with colA:
     fig.add_trace(go.Scatter(x=df["Mês"], y=df["Caixa (Final Mês)"], mode="lines", name="Caixa", line=dict(color="#ff7a45", width=2.5)))
     fig.add_trace(go.Scatter(x=df["Mês"], y=df["Fundo Acumulado"], mode="lines", name="Fundo Acumulado", line=dict(color="#9acd32", width=1.5)))
     fig.add_trace(go.Scatter(x=df["Mês"], y=df["Retiradas Acumuladas"], mode="lines", name="Retiradas Acumuladas", line=dict(color="#ffc75f", width=1.5)))
-    fig.update_layout(margin=dict(l=10, r=10, t=30, b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    
+    # Atualiza layout do gráfico para corresponder ao tema
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=30, b=10), 
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        plot_bgcolor='rgba(0,0,0,0)', # Fundo do gráfico transparente
+        paper_bgcolor='rgba(0,0,0,0)', # Fundo da área do gráfico transparente
+        font=dict(color=TEXT_COLOR) # Cor do texto do gráfico
+    )
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor=TABLE_BORDER_COLOR, zeroline=True, zerolinewidth=2, zerolinecolor=TABLE_BORDER_COLOR)
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor=TABLE_BORDER_COLOR, zeroline=True, zerolinewidth=2, zerolinecolor=TABLE_BORDER_COLOR)
+
     st.plotly_chart(fig, use_container_width=True)
 
 with colB:
     st.subheader("Evolução dos Módulos")
     fig_mod = go.Figure()
     fig_mod.add_trace(go.Scatter(x=df["Mês"], y=df["Módulos Ativos"], mode="lines", name="Módulos", line=dict(color="#2a9d8f", width=2.5), fill='tozeroy'))
-    fig_mod.update_layout(margin=dict(l=10, r=10, t=30, b=10))
+    # Atualiza layout do gráfico para corresponder ao tema
+    fig_mod.update_layout(
+        margin=dict(l=10, r=10, t=30, b=10),
+        plot_bgcolor='rgba(0,0,0,0)', 
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color=TEXT_COLOR)
+    )
+    fig_mod.update_xaxes(showgrid=True, gridwidth=1, gridcolor=TABLE_BORDER_COLOR, zeroline=True, zerolinewidth=2, zerolinecolor=TABLE_BORDER_COLOR)
+    fig_mod.update_yaxes(showgrid=True, gridwidth=1, gridcolor=TABLE_BORDER_COLOR, zeroline=True, zerolinewidth=2, zerolinecolor=TABLE_BORDER_COLOR)
+
     st.plotly_chart(fig_mod, use_container_width=True)
 
 st.markdown("---")
@@ -299,7 +431,7 @@ with col_res3:
         summary_data.append(get_summary_for_point_in_time(df, years, 12))
     
     summary_df = pd.DataFrame(summary_data).set_index("Marco")
-    st.table(summary_df)
+    st.table(summary_df) # st.table usa o CSS global
 
 st.markdown("---")
 
@@ -313,7 +445,7 @@ with st.expander("Clique para expandir e ver todos os dados mensais"):
     ]
     for col in format_cols:
         df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
-    st.dataframe(df_display, use_container_width=True)
+    st.dataframe(df_display, use_container_width=True) # st.dataframe usa o CSS global para suas células
 
 excel_bytes = df_to_excel_bytes(df)
 st.download_button(
