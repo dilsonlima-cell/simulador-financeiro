@@ -5,8 +5,8 @@ import numpy as np
 import plotly.graph_objects as go
 from io import BytesIO
 
-# --- Cores personalizadas (baseadas na sua Image 2) ---
-BG_COLOR = "#FFF1D0"        # Papaya Whip - Fundo principal claro
+# --- Cores personalizadas (baseadas na sua Image 2, com fundo atualizado) ---
+BG_COLOR = "#F7F7F5"        # Branco Gelo - Fundo principal claro e neutro
 TEXT_COLOR = "#000000"       # Preto - Texto principal para contraste
 MUTED_TEXT_COLOR = "#333333" # Cinza escuro - Texto secundário
 TABLE_BORDER_COLOR = "#E0E0E0" # Cinza muito claro - Bordas de tabela sutis no fundo claro
@@ -51,7 +51,7 @@ st.markdown(
     
     /* --- Estilos Globais --- */
     .stApp {{ 
-        background-color: var(--bg-color, {BG_COLOR}); /* Fallback para BG_COLOR */
+        background-color: {BG_COLOR}; 
         color: var(--text-color);
     }}
     
@@ -99,25 +99,25 @@ st.markdown(
         color: var(--sidebar-text-color);
         border: none;
     }}
-    /* Botões "Adicionar" e "Remover" na sidebar */
-    [data-testid="stSidebar"] .stButton > button {{
-        background-color: {GRADIENT_START}; /* Cor para botões de adicionar */
+    /* Botões "Adicionar" na sidebar */
+    .st-emotion-cache-19n205z {{
+        background-color: {GRADIENT_START};
         color: white;
         border: none;
         transition: background-color 0.2s;
     }}
-    [data-testid="stSidebar"] .stButton > button:hover {{
-        background-color: {GRADIENT_END}; /* Hover para botões de adicionar */
+    .st-emotion-cache-19n205z:hover {{
+        background-color: {GRADIENT_END};
         color: white;
     }}
-    /* Específico para o botão de lixeira (remover) */
-    [data-testid="stSidebar"] button[data-testid^="stFileUploaderDropzone-STUDIO-stButton-"] {{
+    /* Botão "Remover" (lixeira) na sidebar */
+    .st-emotion-cache-1x8cf5l {{
         background-color: {CHART_RETIRADAS_COLOR}; /* Vermelho para o botão de lixeira */
     }}
-    [data-testid="stSidebar"] button[data-testid^="stFileUploaderDropzone-STUDIO-stButton-"]:hover {{
+    .st-emotion-cache-1x8cf5l:hover {{
         background-color: #A00000; /* Vermelho mais escuro no hover */
     }}
-    /* Correção visual para expander na sidebar, se necessário */
+    /* Correção visual para expander na sidebar */
     [data-testid="stSidebar"] [data-testid="stExpander"] > div:first-child {{
         border-bottom: 1px solid rgba(255,255,255,0.1);
         margin-bottom: 0.5rem;
@@ -347,9 +347,9 @@ with st.sidebar:
         for i, a in enumerate(st.session_state.aportes):
             col_a1, col_a2, col_a3 = st.columns([1,2,0.5]) # Ajuste no layout das colunas
             with col_a1:
-                a["mes"] = st.number_input(f"Mês", 1, years*12, a["mes"], key=f"ap_mes_{i}", label_visibility="collapsed")
+                a["mes"] = st.number_input(f"Mês #{i+1}", 1, years*12, a["mes"], key=f"ap_mes_{i}", label_visibility="collapsed")
             with col_a2:
-                a["valor"] = st.number_input(f"Valor (R$)", 0.0, value=a["valor"], step=1000.0, key=f"ap_val_{i}", format="%.2f", label_visibility="collapsed")
+                a["valor"] = st.number_input(f"Valor (R$) #{i+1}", 0.0, value=a["valor"], step=1000.0, key=f"ap_val_{i}", format="%.2f", label_visibility="collapsed")
             with col_a3:
                 st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True) # Espaçamento para alinhar botão
                 if st.button("🗑️", key=f"ap_rem_{i}", help="Remover Aporte"):
@@ -361,9 +361,9 @@ with st.sidebar:
         for i, r in enumerate(st.session_state.retiradas):
             col_r1, col_r2, col_r3 = st.columns([1,2,0.5])
             with col_r1:
-                r["mes"] = st.number_input(f"Mês início", 1, years*12, r["mes"], key=f"re_mes_{i}", label_visibility="collapsed")
+                r["mes"] = st.number_input(f"Mês início #{i+1}", 1, years*12, r["mes"], key=f"re_mes_{i}", label_visibility="collapsed")
             with col_r2:
-                r["percentual"] = st.number_input(f"% do caixa", 0.0, 100.0, r["percentual"], step=1.0, key=f"re_pct_{i}", format="%.1f", label_visibility="collapsed")
+                r["percentual"] = st.number_input(f"% do caixa #{i+1}", 0.0, 100.0, r["percentual"], step=1.0, key=f"re_pct_{i}", format="%.1f", label_visibility="collapsed")
             with col_r3:
                 st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
                 if st.button("🗑️", key=f"re_rem_{i}", help="Remover Retirada"):
@@ -375,9 +375,9 @@ with st.sidebar:
         for i, f in enumerate(st.session_state.fundos):
             col_f1, col_f2, col_f3 = st.columns([1,2,0.5])
             with col_f1:
-                f["mes"] = st.number_input(f"Mês início", 1, years*12, f["mes"], key=f"fu_mes_{i}", label_visibility="collapsed")
+                f["mes"] = st.number_input(f"Mês início #{i+1}", 1, years*12, f["mes"], key=f"fu_mes_{i}", label_visibility="collapsed")
             with col_f2:
-                f["percentual"] = st.number_input(f"% do caixa", 0.0, 100.0, f["percentual"], step=1.0, key=f"fu_pct_{i}", format="%.1f", label_visibility="collapsed")
+                f["percentual"] = st.number_input(f"% do caixa #{i+1}", 0.0, 100.0, f["percentual"], step=1.0, key=f"fu_pct_{i}", format="%.1f", label_visibility="collapsed")
             with col_f3:
                 st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
                 if st.button("🗑️", key=f"fu_rem_{i}", help="Remover Fundo"):
