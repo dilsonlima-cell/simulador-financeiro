@@ -8,12 +8,11 @@ from io import BytesIO
 
 # --- Cores personalizadas e Configurações Iniciais ---
 BG_COLOR = "#F7F7F5"
-TEXT_COLOR = "#212529" # Cor de texto escurecida para melhor legibilidade
-MUTED_TEXT_COLOR = "#5a5a5a" # Cinza mais escuro para subtítulos
+TEXT_COLOR = "#212529"
+MUTED_TEXT_COLOR = "#5a5a5a"
 TABLE_BORDER_COLOR = "#E0E0E0"
 SIDEBAR_BG = "#086788"
 SIDEBAR_TEXT_COLOR = "#FFFFFF"
-CARD_BG = "rgba(0,0,0,0.03)"
 GRADIENT_START = "#07A0C3"
 GRADIENT_END = "#F0C808"
 CUSTOM_GRADIENT = f"linear-gradient(90deg, {GRADIENT_START}, {GRADIENT_END})"
@@ -23,6 +22,7 @@ CHART_RETIRADAS_COLOR = "#DD1C1A"
 CHART_MODULOS_COLOR = SIDEBAR_BG
 CHART_RECEITA_COLOR = "#2a9d8f"
 CHART_GASTOS_COLOR = "#e76f51"
+KPI_INVESTIMENTO_COLOR = "#6c757d" # Um cinza neutro para o KPI de investimento
 
 # ---------------------------
 # CSS - Estilos da Página
@@ -40,17 +40,13 @@ st.markdown(f"""
         .stApp {{ background-color: {BG_COLOR}; }}
         .header-title, h1, h2, h3, h4, h5, h6, label, .st-emotion-cache-16idsys p {{ color: {TEXT_COLOR} !important; }}
         .subhead, .st-emotion-cache-1ghhuty p {{ color: {MUTED_TEXT_COLOR} !important; }}
-        /* Correção de legibilidade para Métricas */
         [data-testid="stMetricLabel"] p {{ color: {MUTED_TEXT_COLOR} !important; }}
         [data-testid="stMetricValue"] div {{ color: {TEXT_COLOR} !important; }}
         .card {{ background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid {TABLE_BORDER_COLOR}; height: 100%; }}
-        .kpi-card .small-muted {{ color: {MUTED_TEXT_COLOR}; font-size: 0.9rem; }}
-        .kpi-card .kpi-value {{ font-size: 1.8rem; font-weight: 700; }} /* Fonte levemente menor para 5 KPIs */
-        .kpi-gradient {{ padding: 1.5rem; border-radius: 12px; background: {CUSTOM_GRADIENT}; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.06); height: 100%; }}
+        .kpi-value {{ font-size: 1.8rem; font-weight: 700; }}
         .kpi-colored {{ padding: 1.5rem; border-radius: 12px; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.06); height: 100%; }}
-        .kpi-colored .small-muted {{ color: rgba(255,255,255,0.8); }}
-        .kpi-gradient .small-muted, .kpi-colored .small-muted {{ font-size: 0.9rem; }}
-        .kpi-gradient .kpi-value, .kpi-colored .kpi-value {{ font-size: 1.8rem; font-weight: 700; }}
+        .kpi-gradient {{ padding: 1.5rem; border-radius: 12px; background: {CUSTOM_GRADIENT}; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.06); height: 100%; }}
+        .kpi-colored .small-muted, .kpi-gradient .small-muted {{ color: rgba(255,255,255,0.8); font-size: 0.9rem; }}
         .stDataFrame, .stTable {{ border: none; box-shadow: none; padding: 0; }}
         table {{ width: 100%; }}
     </style>
@@ -139,7 +135,7 @@ def get_default_config():
 if 'config' not in st.session_state: st.session_state.config = get_default_config()
 if 'simulation_df' not in st.session_state: st.session_state.simulation_df = pd.DataFrame()
 if 'page' not in st.session_state: st.session_state.page = 0
-if 'active_page' not in st.session_state: st.session_state.active_page = 'Dashboard'
+if 'active_page' not in st.session_state: st.session_state.active_page = 'Configurações'
 
 # ---------------------------
 # BARRA DE NAVEGAÇÃO LATERAL
@@ -147,7 +143,7 @@ if 'active_page' not in st.session_state: st.session_state.active_page = 'Dashbo
 with st.sidebar:
     st.markdown("<h1>Simulador Modular</h1>", unsafe_allow_html=True)
     st.markdown("<p>Projeção com reinvestimento</p>", unsafe_allow_html=True)
-    st.session_state.active_page = st.radio("Menu Principal", ["Dashboard", "Configurações", "Planilhas"], key="navigation_radio", label_visibility="collapsed")
+    st.session_state.active_page = st.radio("Menu Principal", ["Configurações", "Planilhas", "Dashboard"], key="navigation_radio", label_visibility="collapsed")
 
 # ---------------------------
 # RENDERIZAÇÃO DAS PÁGINAS
@@ -166,6 +162,7 @@ if st.session_state.active_page == 'Configurações':
             st.session_state.simulation_df = simulate(st.session_state.config)
         st.success("Simulação concluída! Verifique as outras abas.")
     
+    # (O código da página de configurações permanece o mesmo, com a correção do erro já aplicada)
     with st.container(border=True):
         st.subheader("Configuração Geral")
         c1, c2 = st.columns(2)
@@ -191,12 +188,10 @@ if st.session_state.active_page == 'Configurações':
         for i, aporte in enumerate(st.session_state.config['aportes']):
             c1, c2, c3 = st.columns([1, 2, 1])
             st.session_state.config['aportes'][i]['mes'] = c1.number_input("Mês", 1, st.session_state.config['years']*12, int(aporte['mes']), key=f"ap_mes_{i}")
-            # CORREÇÃO DO ERRO: Cast para float para evitar MixedNumericTypesError
             st.session_state.config['aportes'][i]['valor'] = c2.number_input("Valor (R$)", 0.0, float(aporte['valor']), format="%.2f", key=f"ap_val_{i}")
             if c3.button("Remover", key=f"ap_rem_{i}"): st.session_state.config['aportes'].pop(i); st.rerun()
         if st.button("Adicionar Aporte"): st.session_state.config['aportes'].append({"mes": 1, "valor": 10000.0}); st.rerun()
         st.markdown("<hr>", unsafe_allow_html=True)
-        
         st.markdown("###### Retiradas (% sobre o caixa mensal)")
         for i, retirada in enumerate(st.session_state.config['retiradas']):
             c1, c2, c3 = st.columns([1, 2, 1])
@@ -205,7 +200,6 @@ if st.session_state.active_page == 'Configurações':
             if c3.button("Remover", key=f"ret_rem_{i}"): st.session_state.config['retiradas'].pop(i); st.rerun()
         if st.button("Adicionar Retirada"): st.session_state.config['retiradas'].append({"mes": 1, "percentual": 10.0}); st.rerun()
         st.markdown("<hr>", unsafe_allow_html=True)
-
         st.markdown("###### Fundos de Reserva (% sobre o caixa mensal)")
         for i, fundo in enumerate(st.session_state.config['fundos']):
             c1, c2, c3 = st.columns([1, 2, 1])
@@ -225,7 +219,7 @@ if st.session_state.active_page == 'Dashboard':
         final = df.iloc[-1]
         
         kpi_cols = st.columns(5)
-        kpi_cols[0].markdown(f"<div class='kpi-card'><div class='small-muted'>Investimento Inicial</div><div class='kpi-value'>{fmt_brl(st.session_state.config['modules_init'] * st.session_state.config['cost_per_module'])}</div></div>", unsafe_allow_html=True)
+        kpi_cols[0].markdown(f"<div class='kpi-colored' style='background-color:{KPI_INVESTIMENTO_COLOR};'><div class='small-muted'>Investimento Inicial</div><div class='kpi-value'>{fmt_brl(st.session_state.config['modules_init'] * st.session_state.config['cost_per_module'])}</div></div>", unsafe_allow_html=True)
         kpi_cols[1].markdown(f"<div class='kpi-gradient'><div class='small-muted'>Módulos Finais</div><div class='kpi-value'>{int(final['Módulos Ativos'])}</div></div>", unsafe_allow_html=True)
         kpi_cols[2].markdown(f"<div class='kpi-colored' style='background-color:{CHART_RETIRADAS_COLOR};'><div class='small-muted'>Retiradas Acumuladas</div><div class='kpi-value'>{fmt_brl(final['Retiradas Acumuladas'])}</div></div>", unsafe_allow_html=True)
         kpi_cols[3].markdown(f"<div class='kpi-colored' style='background-color:{CHART_FUNDO_COLOR};'><div class='small-muted'>Fundo Acumulado</div><div class='kpi-value'>{fmt_brl(final['Fundo Acumulado'])}</div></div>", unsafe_allow_html=True)
@@ -244,7 +238,7 @@ if st.session_state.active_page == 'Dashboard':
                 fig.add_trace(go.Scatter(x=df_evolucao["Mês"], y=df_evolucao["Caixa (Final Mês)"], name="Caixa", line=dict(color=CHART_CAIXA_COLOR, width=2.5)))
                 fig.add_trace(go.Scatter(x=df_evolucao["Mês"], y=df_evolucao["Fundo Acumulado"], name="Fundo", line=dict(color=CHART_FUNDO_COLOR, width=1.5)))
                 fig.add_trace(go.Scatter(x=df_evolucao["Mês"], y=df_evolucao["Retiradas Acumuladas"], name="Retiradas", line=dict(color=CHART_RETIRADAS_COLOR, width=1.5)))
-                fig.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                fig.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='white', paper_bgcolor='white')
                 st.plotly_chart(fig, use_container_width=True)
         with chart_cols[1]:
             with st.container(border=True):
@@ -253,7 +247,7 @@ if st.session_state.active_page == 'Dashboard':
                 periodo_modulos = st.slider("Selecione o período (meses)", 1, max_months_mod, (1, max_months_mod), key="modulos_slider")
                 df_modulos = df[(df['Mês'] >= periodo_modulos[0]) & (df['Mês'] <= periodo_modulos[1])]
                 fig_mod = go.Figure(go.Scatter(x=df_modulos["Mês"], y=df_modulos["Módulos Ativos"], name="Módulos", line=dict(color=CHART_MODULOS_COLOR, width=2.5), fill='tozeroy'))
-                fig_mod.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                fig_mod.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), plot_bgcolor='white', paper_bgcolor='white')
                 st.plotly_chart(fig_mod, use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -267,14 +261,14 @@ if st.session_state.active_page == 'Dashboard':
                 fig_perf = go.Figure()
                 fig_perf.add_trace(go.Bar(x=df_perf['Mês'], y=df_perf['Receita'], name='Receita', marker_color=CHART_RECEITA_COLOR))
                 fig_perf.add_trace(go.Bar(x=df_perf['Mês'], y=df_perf['Gastos'], name='Gastos', marker_color=CHART_GASTOS_COLOR))
-                fig_perf.update_layout(barmode='group', height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                fig_perf.update_layout(barmode='group', height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='white', paper_bgcolor='white')
                 st.plotly_chart(fig_perf, use_container_width=True)
         with chart_cols2[1]:
             with st.container(border=True):
                 st.subheader("Distribuição Final dos Recursos")
                 dist_data = {'Valores': [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']], 'Categorias': ['Retiradas', 'Fundo Total', 'Caixa Final']}
                 fig_pie = px.pie(dist_data, values='Valores', names='Categorias', color_discrete_sequence=[CHART_RETIRADAS_COLOR, CHART_FUNDO_COLOR, CHART_CAIXA_COLOR])
-                fig_pie.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.1))
+                fig_pie.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.1), paper_bgcolor='white')
                 st.plotly_chart(fig_pie, use_container_width=True)
 
 # PÁGINA DE PLANILHAS
@@ -285,20 +279,29 @@ if st.session_state.active_page == 'Planilhas':
         st.info("👈 Vá para a página de 'Configurações' para definir os parâmetros e iniciar uma simulação.")
     else:
         df = st.session_state.simulation_df
-        annual_summary_df = create_annual_summary(df)
-        with st.container(border=True):
-            st.subheader("Resumo Final da Simulação")
-            final_summary_cols = st.columns(2)
-            final = df.iloc[-1]
-            with final_summary_cols[0]:
-                st.metric("Marco Final", f"Ano {final['Ano']}, Mês {((final['Mês']-1)%12)+1}")
-                st.metric("Caixa Final", fmt_brl(final['Caixa (Final Mês)']))
-                st.metric("Retiradas Totais", fmt_brl(final['Retiradas Acumuladas']))
-            with final_summary_cols[1]:
-                st.metric("Módulos Finais", f"{int(final['Módulos Ativos'])}")
-                st.metric("Fundo Total", fmt_brl(final['Fundo Acumulado']))
-                st.metric("Investimento Total", fmt_brl(final['Investimento Total Acumulado']))
         
+        with st.container(border=True):
+            st.subheader("Análise por Ponto no Tempo")
+            c1, c2 = st.columns(2)
+            selected_year = c1.selectbox("Selecione o ano", options=df['Ano'].unique())
+            months_in_year = df[df['Ano'] == selected_year]['Mês'].unique()
+            # Garante que o mês seja exibido como 1-12
+            month_labels = [((m-1)%12)+1 for m in months_in_year]
+            selected_month_label = c2.selectbox("Selecione o mês", options=month_labels)
+            
+            # Converte o label do mês de volta para o mês real da simulação
+            selected_month_abs = df[(df['Ano'] == selected_year) & (((df['Mês']-1)%12)+1 == selected_month_label)]['Mês'].iloc[0]
+            
+            data_point = df[df["Mês"] == selected_month_abs].iloc[0]
+            
+            st.markdown("---")
+            
+            res_cols = st.columns(2)
+            res_cols[0].metric("Módulos Ativos", f"{int(data_point['Módulos Ativos'])}")
+            res_cols[0].metric("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']))
+            res_cols[1].metric("Fundo Acumulado", fmt_brl(data_point['Fundo Acumulado']))
+            res_cols[1].metric("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']))
+
         st.markdown("<br>", unsafe_allow_html=True)
 
         with st.container(border=True):
@@ -318,6 +321,6 @@ if st.session_state.active_page == 'Planilhas':
                 st.session_state.page += 1; st.rerun()
             page_cols[2].markdown(f"<div style='padding-top:10px'>Página {st.session_state.page + 1} de {total_pages}</div>", unsafe_allow_html=True)
             
-        excel_bytes = df_to_excel_bytes(df, annual_summary_df)
-        st.download_button("📥 Baixar Relatório (CSV)", data=excel_bytes, file_name=f"simulacao_modulos_{st.session_state.config['years']}_anos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        excel_bytes = df_to_excel_bytes(df, create_annual_summary(df))
+        st.download_button("📥 Baixar Relatório (Excel)", data=excel_bytes, file_name=f"simulacao_modulos_{st.session_state.config['years']}_anos.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
