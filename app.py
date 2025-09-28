@@ -14,35 +14,50 @@ st.markdown(
     <style>
     :root{
       --g1: linear-gradient(90deg,#ff7a45,#ffc75f,#9acd32);
-      --card-bg: rgba(255,255,255,0.95);
+      /* Cor de fundo do cartão KPI mantida clara para contraste */
+      --card-bg: rgba(255,255,255,0.85); 
     }
-    /* CORREÇÃO APLICADA AQUI */
+    
+    /* --- ALTERAÇÕES DE COR APLICADAS AQUI --- */
     .stApp { 
-      background: linear-gradient(180deg, #FFF 0%, #FFF7F0 100%); 
-      color: #31333F; /* Define a cor padrão do texto para escuro */
+      background-color: #FBE2AD; /* Nova cor de fundo baseada na imagem */
+      color: #000000;             /* Cor padrão do texto definida para preto */
     }
-    .header-title { font-weight:700; font-size:28px; margin:0; color: #111; }
-    .subhead { color: #555; margin-top:4px; margin-bottom:8px; }
+    
+    .header-title, h1, h2, h3, h4, h5, h6 {
+        color: #000000; /* Todos os títulos em preto */
+    }
+    .subhead { 
+        color: #333333; /* Subtítulo em cinza escuro para hierarquia sutil */
+    }
     .kpi-card {
       background: var(--card-bg);
       border-radius: 12px;
       padding: 14px;
-      box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.06);
       border-left: 6px solid rgba(0,0,0,0.04);
     }
     .kpi-gradient {
       padding: 12px; border-radius: 12px;
       background: var(--g1);
-      color: white; /* O texto dentro do gradiente continua branco */
-      box-shadow: 0 6px 18px rgba(15,23,42,0.08);
+      color: white; /* Texto dentro do gradiente continua branco para contraste */
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     }
-    .small-muted { color:#666; font-size:13px; }
-    .pill { display:inline-block; padding:6px 10px; border-radius:999px; font-size:12px; background:#fff7ea; color:#b94a00; border:1px solid rgba(0,0,0,0.03); }
-    table { border-collapse: collapse; width:100%;}
-    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; font-size:13px;}
-    /* Garante que os cabeçalhos também fiquem escuros */
-    h1, h2, h3, h4, h5, h6 {
-        color: #111;
+    .small-muted { 
+        color:#555555; /* Texto menor em cinza escuro */
+    }
+    .pill { 
+      display:inline-block; 
+      padding:6px 10px; 
+      border-radius:999px; 
+      font-size:12px; 
+      background:rgba(255,255,255,0.5); /* Fundo do 'pill' mais sutil */
+      color:#b94a00; 
+      border:1px solid rgba(0,0,0,0.03); 
+    }
+    table, th, td { 
+      color: #000000 !important; /* Força o texto da tabela a ser preto */
+      border-bottom: 1px solid #ddd;
     }
     </style>
     """, unsafe_allow_html=True
