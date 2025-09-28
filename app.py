@@ -414,15 +414,15 @@ if st.session_state.active_page == 'Dashboard':
             with st.container(border=True):
                 dist_data = { 'Valores': [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']], 'Categorias': ['Retiradas', 'Fundo Total', 'Caixa Final'] }
                 fig_pie = px.pie(dist_data, values='Valores', names='Categorias', 
-                               color_discrete_sequence=[DANGER_COLOR, INFO_COLOR, WARNING_COLOR],
-                               hole=0.4)
+                                 color_discrete_sequence=[DANGER_COLOR, INFO_COLOR, WARNING_COLOR],
+                                 hole=0.4)
                 fig_pie.update_layout(title="Distribuição Final dos Recursos", height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.1), paper_bgcolor=CARD_COLOR)
                 st.plotly_chart(fig_pie, use_container_width=True)
     else:
         st.info("👆 Escolha uma estratégia e clique em um dos botões acima para iniciar a simulação.")
 
 # ---------------------------
-# PÁGINA DE PLANILHAS
+# PÁGINA DE PLANILHAS (ATUALIZADA)
 # ---------------------------
 if st.session_state.active_page == 'Planilhas':
     st.title("Relatórios e Dados")
@@ -439,7 +439,7 @@ if st.session_state.active_page == 'Planilhas':
     else:
         df = df_to_show
         
-        main_cols = st.columns([6, 4]) # Define as colunas principais
+        main_cols = st.columns([6, 4])
         
         with main_cols[0]:
             with st.container(border=True):
@@ -463,15 +463,25 @@ if st.session_state.active_page == 'Planilhas':
                 data_point = df_analysis.loc[df_analysis["Mês"] == selected_month_abs].iloc[0]
                 
                 st.markdown("---")
+                # --- MODIFICAÇÃO: Usando render_kpi_card ao invés de st.metric ---
                 res_cols = st.columns(4)
-                res_cols[0].metric("Total de Módulos", f"{int(data_point['Módulos Ativos'])}")
-                res_cols[0].metric("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']))
-                res_cols[1].metric("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']))
-                res_cols[1].metric("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']))
-                res_cols[2].metric("Fundo (Mês)", fmt_brl(data_point['Fundo (Mês)']))
-                res_cols[2].metric("Fundo Acumulado", fmt_brl(data_point['Fundo Acumulado']))
-                res_cols[3].metric("Retirada (Mês)", fmt_brl(data_point['Retirada (Mês)']))
-                res_cols[3].metric("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']))
+                with res_cols[0]:
+                    render_kpi_card("Total de Módulos", f"{int(data_point['Módulos Ativos'])}", MUTED_TEXT_COLOR)
+                    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                    render_kpi_card("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']), PRIMARY_COLOR)
+                with res_cols[1]:
+                    render_kpi_card("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']), WARNING_COLOR)
+                    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                    render_kpi_card("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']), SUCCESS_COLOR)
+                with res_cols[2]:
+                    render_kpi_card("Fundo (Mês)", fmt_brl(data_point['Fundo (Mês)']), INFO_COLOR)
+                    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                    render_kpi_card("Fundo Acumulado", fmt_brl(data_point['Fundo Acumulado']), INFO_COLOR)
+                with res_cols[3]:
+                    render_kpi_card("Retirada (Mês)", fmt_brl(data_point['Retirada (Mês)']), DANGER_COLOR)
+                    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+                    render_kpi_card("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']), DANGER_COLOR)
+
 
         with main_cols[1]:
             with st.container(border=True):
@@ -493,7 +503,12 @@ if st.session_state.active_page == 'Planilhas':
                                          "Retirada": DANGER_COLOR,
                                          "Fundo": INFO_COLOR
                                      })
-                fig_monthly.update_layout(showlegend=False, height=450, margin=dict(l=10,r=10,t=40,b=10))
+                # --- MODIFICAÇÃO: Adicionado fundo ao gráfico ---
+                fig_monthly.update_layout(
+                    showlegend=False, height=450, margin=dict(l=10,r=10,t=40,b=10),
+                    plot_bgcolor=CARD_COLOR,
+                    paper_bgcolor=CARD_COLOR
+                )
                 st.plotly_chart(fig_monthly, use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -505,6 +520,21 @@ if st.session_state.active_page == 'Planilhas':
                  st.markdown(f"Mostrando dados da estratégia: **{selected_strategy}**")
                  df_display_base = df_analysis
 
+            # --- MODIFICAÇÃO: Seletor de colunas ---
+            all_columns = df_display_base.columns.tolist()
+            if 'Estratégia' in all_columns:
+                all_columns.remove('Estratégia')
+                
+            default_cols = ['Mês', 'Ano', 'Módulos Ativos', 'Receita', 'Gastos', 'Caixa (Final Mês)', 'Patrimônio Líquido']
+            valid_default_cols = [col for col in default_cols if col in all_columns]
+
+            cols_to_show = st.multiselect(
+                "Selecione as colunas para exibir na tabela:",
+                options=all_columns,
+                default=valid_default_cols
+            )
+            # ----------------------------------------
+            
             page_size = 12
             total_pages = (len(df_display_base) - 1) // page_size + 1
             if 'page' not in st.session_state: st.session_state.page = 0
@@ -521,8 +551,10 @@ if st.session_state.active_page == 'Planilhas':
                 if col in df_display.columns:
                     df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
             
-            cols_to_show = ['Mês', 'Ano', 'Módulos Ativos', 'Receita', 'Gastos', 'Caixa (Final Mês)', 'Patrimônio Líquido']
-            st.dataframe( df_display[cols_to_show], use_container_width=True, hide_index=True )
+            if cols_to_show:
+                st.dataframe( df_display[cols_to_show], use_container_width=True, hide_index=True )
+            else:
+                st.warning("Por favor, selecione ao menos uma coluna para exibir os dados.")
 
             page_cols = st.columns([1, 1, 8])
             if page_cols[0].button("Anterior", disabled=(st.session_state.page == 0), type="secondary"):
