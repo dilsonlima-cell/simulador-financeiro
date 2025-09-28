@@ -27,7 +27,10 @@ st.markdown(f"""
     <style>
         .main .block-container {{ padding: 1.5rem 2rem; }}
         [data-testid="stSidebar"] {{ background-color: {DARK_BACKGROUND}; }}
-        [data-testid="stSidebar"] .stMarkdown h1 {{ padding-top: 1rem; color: {LIGHT_BACKGROUND}; }}
+        /* --- MODIFICAÇÃO: Título da barra lateral mais visível --- */
+        [data-testid="stSidebar"] .stMarkdown h1 {{
+            padding-top: 1rem; color: #FFFFFF; font-weight: 700;
+        }}
         [data-testid="stSidebar"] .stMarkdown p {{ color: rgba(236, 240, 241, 0.8); }}
         .stRadio > div {{ gap: 0.5rem; }}
         .stRadio > label > div {{
@@ -110,6 +113,7 @@ def simulate(config, reinvestment_strategy):
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
     custo_modulo_atual_owned = cfg_owned['cost_per_module']
     
+    # --- MODIFICAÇÃO: Lógica removida pois o campo foi excluído ---
     valor_terrenos_adicionais = 0.0
 
     valor_entrada_terreno = 0.0
@@ -176,7 +180,6 @@ def simulate(config, reinvestment_strategy):
                     if reinvestment_strategy == 'buy':
                         modules_owned += novos_modulos_comprados
                         parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * cfg_owned['monthly_land_plot_parcel']
-                        valor_terrenos_adicionais += novos_modulos_comprados * cfg_owned['land_value_per_module']
                     elif reinvestment_strategy == 'rent':
                         modules_rented += novos_modulos_comprados
                         aluguel_mensal_corrente += novos_modulos_comprados * cfg_rented['rent_per_new_module']
@@ -185,7 +188,6 @@ def simulate(config, reinvestment_strategy):
                             if compra_intercalada_counter % 2 == 0:
                                 modules_owned += 1
                                 parcelas_terrenos_novos_mensal_corrente += cfg_owned['monthly_land_plot_parcel']
-                                valor_terrenos_adicionais += cfg_owned['land_value_per_module']
                             else:
                                 modules_rented += 1
                                 aluguel_mensal_corrente += cfg_rented['rent_per_new_module']
@@ -208,8 +210,8 @@ def get_default_config():
         'owned': { 
             'modules_init': 0, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0, 
             'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0, 
-            'monthly_land_plot_parcel': 0.0, 
-            'land_value_per_module': 50000.0,
+            'monthly_land_plot_parcel': 0.0,
+            # --- MODIFICAÇÃO: Campo removido ---
             'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120 
         },
         'global': { 'years': 15, 'max_withdraw_value': 50000.0, 'aportes': [], 'retiradas': [], 'fundos': [] }
@@ -221,6 +223,7 @@ if 'config' not in st.session_state:
 if 'simulation_df' not in st.session_state: st.session_state.simulation_df = pd.DataFrame()
 if 'comparison_df' not in st.session_state: st.session_state.comparison_df = pd.DataFrame()
 if 'active_page' not in st.session_state: st.session_state.active_page = 'Dashboard'
+if 'column_visibility' not in st.session_state: st.session_state.column_visibility = {}
 
 # ---------------------------
 # BARRA DE NAVEGAÇÃO LATERAL
@@ -283,7 +286,8 @@ if st.session_state.active_page == 'Configurações':
     cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
     cfg_o['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_o['cost_correction_rate'], format="%.1f", key="own_corr_rate")
     
-    cfg_o['land_value_per_module'] = c1.number_input("Valor do terreno por novo módulo (R$)", 0.0, value=cfg_o.get('land_value_per_module', 50000.0), format="%.2f", key="own_land_value_per_module", help="O valor do ativo (terra) a ser adicionado ao patrimônio por cada novo módulo próprio.")
+    # --- MODIFICAÇÃO: Campo removido ---
+    # cfg_o['land_value_per_module'] = c1.number_input(...)
     
     cfg_o['monthly_land_plot_parcel'] = c2.number_input( "Parcela mensal por novo terreno (R$)", 0.0, value=cfg_o.get('monthly_land_plot_parcel', 0.0), format="%.2f", key="own_land_parcel", disabled=(cfg_o['land_total_value'] > 0), help="Este valor é preenchido automaticamente se um financiamento de terreno inicial for configurado." )
     st.markdown('</div>', unsafe_allow_html=True)
@@ -384,6 +388,7 @@ if st.session_state.active_page == 'Dashboard':
             render_kpi_card("Melhor Estratégia", best_strategy, SUCCESS_COLOR)
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
+            st.subheader("Comparativo de Métricas ao Longo do Tempo")
             metric_options = { "Patrimônio Líquido": "Patrimônio Líquido", "Módulos Ativos": "Módulos Ativos", "Retiradas Acumuladas": "Retiradas Acumuladas", "Fundo Acumulado": "Fundo Acumulado", "Caixa (Final Mês)": "Caixa (Final Mês)" }
             selected_metric = st.selectbox("Selecione uma métrica para comparar:", options=list(metric_options.keys()))
             fig_comp = px.line(df_comp, x="Mês", y=metric_options[selected_metric], color='Estratégia', title=f'Comparativo de {selected_metric}', color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': MUTED_TEXT_COLOR, 'Intercalar': WARNING_COLOR })
@@ -393,18 +398,30 @@ if st.session_state.active_page == 'Dashboard':
     elif not st.session_state.simulation_df.empty:
         df = st.session_state.simulation_df
         final = df.iloc[-1]
+        cfg = st.session_state.config
+        
+        # --- MODIFICAÇÃO: Cálculo do Investimento Inicial ---
+        inv_inicial_modulos = (cfg['rented']['modules_init'] * cfg['rented']['cost_per_module']) + \
+                              (cfg['owned']['modules_init'] * cfg['owned']['cost_per_module'])
+        entrada_terreno = 0
+        if cfg['owned']['land_total_value'] > 0:
+            entrada_terreno = cfg['owned']['land_total_value'] * (cfg['owned']['land_down_payment_pct'] / 100.0)
+        investimento_inicial_total = inv_inicial_modulos + entrada_terreno
+
         st.subheader("Resultados da Simulação")
-        kpi_cols = st.columns(4)
-        with kpi_cols[0]: render_kpi_card("Patrimônio Líquido Final", fmt_brl(final['Patrimônio Líquido']), PRIMARY_COLOR)
-        with kpi_cols[1]: render_kpi_card("Retiradas Acumuladas", fmt_brl(final['Retiradas Acumuladas']), DANGER_COLOR)
-        with kpi_cols[2]: render_kpi_card("Fundo Acumulado", fmt_brl(final['Fundo Acumulado']), INFO_COLOR)
-        with kpi_cols[3]: render_kpi_card("Módulos Ativos Finais", f"{int(final['Módulos Ativos'])}", MUTED_TEXT_COLOR)
+        kpi_cols = st.columns(5) # Alterado para 5 colunas
+        with kpi_cols[0]: render_kpi_card("Investimento Inicial", fmt_brl(investimento_inicial_total), SUCCESS_COLOR)
+        with kpi_cols[1]: render_kpi_card("Patrimônio Líquido Final", fmt_brl(final['Patrimônio Líquido']), PRIMARY_COLOR)
+        with kpi_cols[2]: render_kpi_card("Retiradas Acumuladas", fmt_brl(final['Retiradas Acumuladas']), DANGER_COLOR)
+        with kpi_cols[3]: render_kpi_card("Fundo Acumulado", fmt_brl(final['Fundo Acumulado']), INFO_COLOR)
+        with kpi_cols[4]: render_kpi_card("Módulos Ativos Finais", f"{int(final['Módulos Ativos'])}", MUTED_TEXT_COLOR)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("##### Análise Gráfica Detalhada")
+        
         c1, c2 = st.columns(2)
         with c1:
             with st.container(border=True):
+                st.subheader("Evolução do Patrimônio vs. Investimento")
                 fig_pat = go.Figure()
                 fig_pat.add_trace(go.Scatter(x=df["Mês"], y=df["Patrimônio Líquido"], name="Patrimônio", line=dict(color=PRIMARY_COLOR, width=2.5)))
                 fig_pat.add_trace(go.Scatter(x=df["Mês"], y=df["Investimento Total Acumulado"], name="Investimento", line=dict(color=MUTED_TEXT_COLOR, width=1.5)))
@@ -412,6 +429,7 @@ if st.session_state.active_page == 'Dashboard':
                 st.plotly_chart(fig_pat, use_container_width=True)
         with c2:
             with st.container(border=True):
+                st.subheader("Distribuição Final dos Recursos")
                 dist_data = { 'Valores': [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']], 'Categorias': ['Retiradas', 'Fundo Total', 'Caixa Final'] }
                 fig_pie = px.pie(dist_data, values='Valores', names='Categorias', 
                                  color_discrete_sequence=[DANGER_COLOR, INFO_COLOR, WARNING_COLOR],
@@ -446,7 +464,6 @@ if st.session_state.active_page == 'Planilhas':
                 st.subheader("Análise por Ponto no Tempo")
                 
                 df_analysis = df
-                # Adiciona seletor de estratégia se estiver no modo de comparação
                 if 'Estratégia' in df.columns:
                     selected_strategy = st.selectbox("Selecione a estratégia para análise:", df['Estratégia'].unique())
                     df_analysis = df[df['Estratégia'] == selected_strategy].copy()
@@ -463,7 +480,6 @@ if st.session_state.active_page == 'Planilhas':
                 data_point = df_analysis.loc[df_analysis["Mês"] == selected_month_abs].iloc[0]
                 
                 st.markdown("---")
-                # --- MODIFICAÇÃO: Usando render_kpi_card ao invés de st.metric ---
                 res_cols = st.columns(4)
                 with res_cols[0]:
                     render_kpi_card("Total de Módulos", f"{int(data_point['Módulos Ativos'])}", MUTED_TEXT_COLOR)
@@ -482,7 +498,6 @@ if st.session_state.active_page == 'Planilhas':
                     st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
                     render_kpi_card("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']), DANGER_COLOR)
 
-
         with main_cols[1]:
             with st.container(border=True):
                 st.subheader("Resumo Gráfico do Mês")
@@ -498,16 +513,12 @@ if st.session_state.active_page == 'Planilhas':
                 fig_monthly = px.bar(chart_data, x="Categoria", y="Valor", text_auto='.2s', title=f"Fluxo Financeiro - Mês {selected_month_abs}",
                                      color="Categoria",
                                      color_discrete_map={
-                                         "Receita": SUCCESS_COLOR,
-                                         "Gastos": WARNING_COLOR,
-                                         "Retirada": DANGER_COLOR,
-                                         "Fundo": INFO_COLOR
+                                         "Receita": SUCCESS_COLOR, "Gastos": WARNING_COLOR,
+                                         "Retirada": DANGER_COLOR, "Fundo": INFO_COLOR
                                      })
-                # --- MODIFICAÇÃO: Adicionado fundo ao gráfico ---
                 fig_monthly.update_layout(
                     showlegend=False, height=450, margin=dict(l=10,r=10,t=40,b=10),
-                    plot_bgcolor=CARD_COLOR,
-                    paper_bgcolor=CARD_COLOR
+                    plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR
                 )
                 st.plotly_chart(fig_monthly, use_container_width=True)
 
@@ -520,33 +531,43 @@ if st.session_state.active_page == 'Planilhas':
                  st.markdown(f"Mostrando dados da estratégia: **{selected_strategy}**")
                  df_display_base = df_analysis
 
-            # --- MODIFICAÇÃO: Seletor de colunas ---
+            # --- MODIFICAÇÃO: Seletor de colunas com botões Toggle ---
             all_columns = df_display_base.columns.tolist()
-            if 'Estratégia' in all_columns:
-                all_columns.remove('Estratégia')
-                
+            if 'Estratégia' in all_columns: all_columns.remove('Estratégia')
             default_cols = ['Mês', 'Ano', 'Módulos Ativos', 'Receita', 'Gastos', 'Caixa (Final Mês)', 'Patrimônio Líquido']
-            valid_default_cols = [col for col in default_cols if col in all_columns]
 
-            cols_to_show = st.multiselect(
-                "Selecione as colunas para exibir na tabela:",
-                options=all_columns,
-                default=valid_default_cols
-            )
-            # ----------------------------------------
+            # Reseta o estado da visibilidade se as colunas mudarem
+            if set(st.session_state.column_visibility.keys()) != set(all_columns):
+                st.session_state.column_visibility = {col: (col in default_cols) for col in all_columns}
+
+            with st.expander("Exibir/Ocultar Colunas da Tabela"):
+                toggle_cols = st.columns(4) # Layout para os botões
+                col_idx = 0
+                for col_name in all_columns:
+                    with toggle_cols[col_idx % 4]:
+                        st.session_state.column_visibility[col_name] = st.toggle(
+                            col_name, value=st.session_state.column_visibility.get(col_name, False)
+                        )
+                    col_idx += 1
+
+            cols_to_show = [col for col, is_visible in st.session_state.column_visibility.items() if is_visible]
+            # -----------------------------------------------------------
             
             page_size = 12
             total_pages = (len(df_display_base) - 1) // page_size + 1
             if 'page' not in st.session_state: st.session_state.page = 0
             
-            if st.session_state.page >= total_pages:
-                st.session_state.page = 0
+            if st.session_state.page >= total_pages: st.session_state.page = 0
 
             start_idx = st.session_state.page * page_size
             end_idx = start_idx + page_size
 
             df_display = df_display_base.iloc[start_idx:end_idx].copy()
-            format_cols = ["Receita", "Manutenção", "Aluguel", "Parcelas Terrenos (Novos)", "Aporte", "Fundo (Mês)", "Retirada (Mês)", "Caixa (Final Mês)", "Investimento Total Acumulado", "Fundo Acumulado", "Retiradas Acumuladas", "Patrimônio Líquido", "Gastos"]
+            format_cols = [
+                "Receita", "Manutenção", "Aluguel", "Parcelas Terrenos (Novos)", "Aporte", "Fundo (Mês)", 
+                "Retirada (Mês)", "Caixa (Final Mês)", "Investimento Total Acumulado", "Fundo Acumulado", 
+                "Retiradas Acumuladas", "Patrimônio Líquido", "Gastos"
+            ]
             for col in format_cols:
                 if col in df_display.columns:
                     df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
