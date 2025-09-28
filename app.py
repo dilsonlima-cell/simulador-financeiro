@@ -85,8 +85,6 @@ def simulate(config, reinvestment_strategy):
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
     custo_modulo_atual_owned = cfg_owned['cost_per_module']
 
-    aportes_map = {a["mes"]: a.get("valor", 0.0) for a in cfg_global['aportes']}
-
     # Financiamento do terreno inicial (mantido como antes)
     valor_entrada_terreno = 0.0
     valor_parcela_terreno_inicial = 0.0
@@ -109,8 +107,8 @@ def simulate(config, reinvestment_strategy):
 
         novos_modulos_comprados = 0
 
-        # Aportes
-        aporte_mes = aportes_map.get(m, 0.0)
+        # Aportes (Lógica atualizada para múltiplos aportes no mesmo mês)
+        aporte_mes = sum(a.get('valor', 0.0) for a in cfg_global['aportes'] if a.get('mes') == m)
         caixa += aporte_mes
         investimento_total += aporte_mes
 
@@ -243,8 +241,7 @@ def get_default_config():
             'cost_correction_rate': 5.0,
             'revenue_per_module': 4500.0,
             'maintenance_per_module': 200.0,
-            # Campo renomeado: parcela mensal por novo terreno
-            'monthly_land_plot_parcel': 50000.0,  # mantém o valor anterior; ajuste conforme seu cenário
+            'monthly_land_plot_parcel': 0.0,
             'land_total_value': 0.0,
             'land_down_payment_pct': 20.0,
             'land_installments': 120
@@ -252,16 +249,15 @@ def get_default_config():
         'global': {
             'years': 15,
             'max_withdraw_value': 50000.0,
-            'aportes': [{"mes": 3, "valor": 0.0}],
-            'retiradas': [{"mes": 25, "percentual": 30.0}],
-            'fundos': [{"mes": 25, "percentual": 10.0}]
+            'aportes': [],
+            'retiradas': [],
+            'fundos': []
         }
     }
 
 def migrate_config(cfg: dict) -> dict:
     """Migra chaves antigas para o novo padrão sem quebrar sessões existentes."""
     owned = cfg.get('owned', {})
-    # Renomeia cost_per_land_plot -> monthly_land_plot_parcel, se necessário
     if 'monthly_land_plot_parcel' not in owned and 'cost_per_land_plot' in owned:
         owned['monthly_land_plot_parcel'] = owned.pop('cost_per_land_plot')
     cfg['owned'] = owned
@@ -317,20 +313,16 @@ if st.session_state.active_page == 'Configurações':
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # --- CARTÃO UNIFICADO: TERRENO COMPRADO + FINANCIAMENTO ---
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Investimento com Terreno Comprado")
-    c1, c2 = st.columns(2)
     cfg_o = st.session_state.config['owned']
-    cfg_o['modules_init'] = c1.number_input("Módulos iniciais (próprios)", 0, value=cfg_o['modules_init'], key="own_mod_init")
-    cfg_o['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_o['cost_per_module'], format="%.2f", key="own_cost_mod")
-    cfg_o['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_o['revenue_per_module'], format="%.2f", key="own_rev_mod")
-    cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
-    cfg_o['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_o['cost_correction_rate'], format="%.1f", key="own_corr_rate")
-    # Campo RENOMEADO
-    cfg_o['monthly_land_plot_parcel'] = c2.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=cfg_o.get('monthly_land_plot_parcel', 0.0), format="%.2f", key="own_land_parcel")
-    st.markdown("---")
+
+    # Seção de Financiamento (movida para o topo)
     st.markdown("###### Financiamento do Terreno Inicial (Opcional)")
     cfg_o['land_total_value'] = st.number_input("Valor total do terreno inicial (R$)", 0.0, value=cfg_o['land_total_value'], format="%.2f", key="own_total_land_val")
+
+    valor_parcela = 0.0
     if cfg_o['land_total_value'] > 0:
         c1_fin, c2_fin = st.columns(2)
         cfg_o['land_down_payment_pct'] = c1_fin.number_input("Entrada (%)", 0.0, 100.0, value=cfg_o['land_down_payment_pct'], format="%.1f", key="own_down_pay")
@@ -340,19 +332,93 @@ if st.session_state.active_page == 'Configurações':
         valor_parcela = valor_financiado / cfg_o['land_installments'] if cfg_o['land_installments'] > 0 else 0
         c2_fin.metric("Valor da Entrada", fmt_brl(valor_entrada))
         c2_fin.metric("Valor da Parcela", fmt_brl(valor_parcela))
+        # Preenchimento automático
+        cfg_o['monthly_land_plot_parcel'] = valor_parcela
+    else:
+        # Garante que o valor seja zerado se o financiamento for desativado
+        cfg_o['monthly_land_plot_parcel'] = 0.0
+
+
+    st.markdown("---")
+
+    # Seção de Parâmetros do Módulo
+    c1, c2 = st.columns(2)
+    cfg_o['modules_init'] = c1.number_input("Módulos iniciais (próprios)", 0, value=cfg_o['modules_init'], key="own_mod_init")
+    cfg_o['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_o['cost_per_module'], format="%.2f", key="own_cost_mod")
+    cfg_o['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_o['revenue_per_module'], format="%.2f", key="own_rev_mod")
+    cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
+    cfg_o['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_o['cost_correction_rate'], format="%.1f", key="own_corr_rate")
+    
+    # Campo vinculado e desabilitado se houver financiamento
+    cfg_o['monthly_land_plot_parcel'] = c2.number_input(
+        "Parcela mensal por novo terreno (R$)",
+        0.0,
+        value=cfg_o.get('monthly_land_plot_parcel', 0.0),
+        format="%.2f",
+        key="own_land_parcel",
+        disabled=(cfg_o['land_total_value'] > 0),
+        help="Este valor é preenchido automaticamente se um financiamento de terreno inicial for configurado."
+    )
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # --- CARTÃO DE PARÂMETROS GLOBAIS ---
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("Parâmetros Globais e Eventos Financeiros")
+    st.subheader("Parâmetros Globais")
     cfg_g = st.session_state.config['global']
     c1, c2 = st.columns(2)
     cfg_g['years'] = c1.number_input("Horizonte de investimento (anos)", 1, 50, cfg_g['years'])
     cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em % do lucro.")
-    st.markdown("---")
-    st.markdown("###### Eventos Financeiros (% sobre o lucro mensal)")
-    # (Lógica de eventos permanece a mesma)
     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- NOVO CARTÃO DINÂMICO: EVENTOS FINANCEIROS ---
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Eventos Financeiros")
+
+    # Seção de Aportes
+    st.markdown("<h6>Aportes (investimentos pontuais)</h6>", unsafe_allow_html=True)
+    for i, aporte in enumerate(st.session_state.config['global']['aportes']):
+        cols = st.columns([2, 3, 1])
+        aporte['mes'] = cols[0].number_input("Mês", min_value=1, value=aporte['mes'], key=f"aporte_mes_{i}")
+        aporte['valor'] = cols[1].number_input("Valor (R$)", min_value=0.0, value=aporte['valor'], format="%.2f", key=f"aporte_valor_{i}")
+        if cols[2].button("Remover", key=f"aporte_remover_{i}"):
+            st.session_state.config['global']['aportes'].pop(i)
+            st.rerun()
+    if st.button("Adicionar Aporte"):
+        st.session_state.config['global']['aportes'].append({"mes": 1, "valor": 0.0})
+        st.rerun()
+    st.markdown("---")
+
+    # Seção de Retiradas
+    st.markdown("<h6>Retiradas (% sobre o lucro mensal)</h6>", unsafe_allow_html=True)
+    for i, retirada in enumerate(st.session_state.config['global']['retiradas']):
+        cols = st.columns([2, 3, 1])
+        retirada['mes'] = cols[0].number_input("Mês início", min_value=1, value=retirada['mes'], key=f"retirada_mes_{i}")
+        retirada['percentual'] = cols[1].number_input("% do lucro", min_value=0.0, max_value=100.0, value=retirada['percentual'], format="%.1f", key=f"retirada_pct_{i}")
+        if cols[2].button("Remover", key=f"retirada_remover_{i}"):
+            st.session_state.config['global']['retiradas'].pop(i)
+            st.rerun()
+    if st.button("Adicionar Retirada"):
+        st.session_state.config['global']['retiradas'].append({"mes": 1, "percentual": 30.0})
+        st.rerun()
+    st.markdown("---")
+
+    # Seção de Fundos de Reserva
+    st.markdown("<h6>Fundos de Reserva (% sobre o lucro mensal)</h6>", unsafe_allow_html=True)
+    for i, fundo in enumerate(st.session_state.config['global']['fundos']):
+        cols = st.columns([2, 3, 1])
+        fundo['mes'] = cols[0].number_input("Mês início", min_value=1, value=fundo['mes'], key=f"fundo_mes_{i}")
+        fundo['percentual'] = cols[1].number_input("% do lucro", min_value=0.0, max_value=100.0, value=fundo['percentual'], format="%.1f", key=f"fundo_pct_{i}")
+        if cols[2].button("Remover", key=f"fundo_remover_{i}"):
+            st.session_state.config['global']['fundos'].pop(i)
+            st.rerun()
+    if st.button("Adicionar Fundo"):
+        st.session_state.config['global']['fundos'].append({"mes": 1, "percentual": 10.0})
+        st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
 # PÁGINA DO DASHBOARD
 if st.session_state.active_page == 'Dashboard':
