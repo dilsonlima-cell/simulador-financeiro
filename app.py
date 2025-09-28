@@ -73,7 +73,6 @@ def create_annual_summary(df: pd.DataFrame):
     return annual_df[['Ano', 'Módulos (Final Ano)', 'Receita', 'Manutenção', 'Aluguel', 'Aporte', 'Retirada (Ano)', 'Fundo (Ano)', 'Módulos Comprados no Ano', 'Caixa (Final Ano)']]
 
 def simulate(config):
-    # (Lógica de simulação permanece a mesma)
     years, modules_init, cost_per_module, cost_correction_rate, revenue_per_module, maintenance_per_module, rent_value, rent_start_month, max_withdraw_value, aportes, retiradas, fundos = (
         config['years'], config['modules_init'], config['cost_per_module'], config['cost_correction_rate'], config['revenue_per_module'], config['maintenance_per_module'],
         config['rent_value'], config['rent_start_month'], config['max_withdraw_value'], config['aportes'], config['retiradas'], config['fundos']
@@ -95,24 +94,40 @@ def simulate(config):
         aporte_mes = aportes_map.get(m, 0.0)
         caixa += aporte_mes
         investimento_total += aporte_mes
-        caixa += receita - manut - aluguel
+        
+        # --- CORREÇÃO DA LÓGICA DE DISTRIBUIÇÃO ---
+        # 1. Calcula o lucro operacional do mês ANTES de adicioná-lo ao caixa geral.
+        lucro_operacional_mes = receita - manut - aluguel
+        
         fundo_mes_total = 0.0
         retirada_mes_total_potencial = 0.0
-        if caixa > 0:
-            caixa_dist = caixa
+
+        # 2. As distribuições (retiradas, fundos) são baseadas APENAS no lucro do mês, se houver.
+        if lucro_operacional_mes > 0:
+            base_distribuicao = lucro_operacional_mes
             for r in retiradas:
-                if m >= r["mes"]: retirada_mes_total_potencial += caixa_dist * (r["percentual"] / 100.0)
+                if m >= r["mes"]: retirada_mes_total_potencial += base_distribuicao * (r["percentual"] / 100.0)
             for f in fundos:
-                if m >= f["mes"]: fundo_mes_total += caixa_dist * (f["percentual"] / 100.0)
+                if m >= f["mes"]: fundo_mes_total += base_distribuicao * (f["percentual"] / 100.0)
+
+        # A lógica de teto de retirada continua a mesma
         excesso_para_fundo = 0.0
         retirada_mes_efetiva = retirada_mes_total_potencial
         if max_withdraw_value > 0 and retirada_mes_total_potencial > max_withdraw_value:
             excesso_para_fundo = retirada_mes_total_potencial - max_withdraw_value
             retirada_mes_efetiva = max_withdraw_value
+        
         fundo_mes_total += excesso_para_fundo
+        
+        # 3. O lucro do mês é adicionado ao caixa, e SÓ ENTÃO as distribuições são subtraídas.
+        #    Isso permite que o caixa acumulado seja preservado para o reinvestimento anual.
+        caixa += lucro_operacional_mes
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
+
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
+        
+        # A lógica de compra de módulos no final do ano permanece a mesma
         if m % 12 == 0:
             if caixa >= custo_modulo_atual:
                 novos_modulos_comprados = int(caixa // custo_modulo_atual)
@@ -121,7 +136,9 @@ def simulate(config):
                 modules += novos_modulos_comprados
                 investimento_total += custo_da_compra
             custo_modulo_atual *= (1 + cost_correction_rate / 100.0)
+            
         rows.append({"Mês": m, "Ano": (m - 1) // 12 + 1, "Módulos Ativos": modules, "Receita": receita, "Manutenção": manut, "Aluguel": aluguel, "Gastos": manut + aluguel, "Aporte": aporte_mes, "Fundo (Mês)": fundo_mes_total, "Retirada (Mês)": retirada_mes_efetiva, "Caixa (Final Mês)": caixa, "Investimento Total Acumulado": investimento_total, "Fundo Acumulado": fundo_ac, "Retiradas Acumuladas": retiradas_ac, "Módulos Comprados no Ano": novos_modulos_comprados, "Custo Módulo (Próx. Ano)": custo_modulo_atual if m % 12 == 0 else np.nan})
+    
     df = pd.DataFrame(rows)
     df["Custo Módulo (Próx. Ano)"] = df["Custo Módulo (Próx. Ano)"].ffill()
     return df
@@ -162,7 +179,6 @@ if st.session_state.active_page == 'Configurações':
             st.session_state.simulation_df = simulate(st.session_state.config)
         st.success("Simulação concluída! Verifique as outras abas.")
     
-    # (O código da página de configurações permanece o mesmo, com a correção do erro já aplicada)
     with st.container(border=True):
         st.subheader("Configuração Geral")
         c1, c2 = st.columns(2)
@@ -283,15 +299,14 @@ if st.session_state.active_page == 'Planilhas':
         with st.container(border=True):
             st.subheader("Análise por Ponto no Tempo")
             c1, c2 = st.columns(2)
-            selected_year = c1.selectbox("Selecione o ano", options=df['Ano'].unique())
+            anos_disponiveis = df['Ano'].unique()
+            selected_year = c1.selectbox("Selecione o ano", options=anos_disponiveis)
+            
             months_in_year = df[df['Ano'] == selected_year]['Mês'].unique()
-            # Garante que o mês seja exibido como 1-12
             month_labels = [((m-1)%12)+1 for m in months_in_year]
             selected_month_label = c2.selectbox("Selecione o mês", options=month_labels)
             
-            # Converte o label do mês de volta para o mês real da simulação
             selected_month_abs = df[(df['Ano'] == selected_year) & (((df['Mês']-1)%12)+1 == selected_month_label)]['Mês'].iloc[0]
-            
             data_point = df[df["Mês"] == selected_month_abs].iloc[0]
             
             st.markdown("---")
