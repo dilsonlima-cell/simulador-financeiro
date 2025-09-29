@@ -46,10 +46,8 @@ def _luminance(rgb):
     return 0.2126*r + 0.7152*g + 0.0722*b
 
 def ideal_text_color(bg_hex: str) -> str:
-    L_bg = _luminance(_hex_to_rgb(bg_hex))
-    contrast_white = (1.0 + 0.05) / (L_bg + 0.05)
-    contrast_black = (L_bg + 0.05) / (0.0 + 0.05)
-    return "#FFFFFF" if contrast_white >= contrast_black else "#0B1221"
+    """Força o uso da cor de texto corporativa (azul escuro) em todos os casos."""
+    return TEXT_COLOR
 
 def fmt_brl(v):
     """Formata um valor numérico como uma string de moeda brasileira de forma robusta."""
@@ -63,7 +61,7 @@ def fmt_brl(v):
         return "R$ 0,00"
 
 def render_kpi_card(title, value, bg_color):
-    """Renderiza um cartão de KPI com cor de texto automática para melhor contraste."""
+    """Renderiza um cartão de KPI com cor de texto fixa (azul corporativo)."""
     text_color = ideal_text_color(bg_color)
     st.markdown(f"""
         <div class="kpi-card" style="background-color:{bg_color}; color:{text_color};">
@@ -114,7 +112,7 @@ st.markdown(f"""
         [data-testid="stSidebar"] {{ background-color: #111827; }}
         /* Cor de texto na sidebar mantida como clara para contraste com fundo escuro */
         [data-testid="stSidebar"] * {{ color: #E5E7EB; }}
-        [data-testid="stSidebar"] h1 {{ color: #FFFFFF; }}
+        [data-testid="stSidebar"] h1 {{ color: {TEXT_COLOR}; }}
         
         /* Cor principal do texto da aplicação agora usa TEXT_COLOR (azul escuro) */
         h1, h2, h3, h4, h5, h6, label, p, span {{ color: {TEXT_COLOR}; }}
@@ -124,8 +122,7 @@ st.markdown(f"""
             border-radius: 8px;
             border: 1px solid {PRIMARY_COLOR};
             background-color: {PRIMARY_COLOR};
-            /* Cor de texto no botão mantida como branca para contraste */
-            color: #FFFFFF; padding: 10px 16px; font-weight: 600;
+            color: {TEXT_COLOR}; padding: 10px 16px; font-weight: 600;
         }}
         .stButton > button:hover {{
             background-color: #1E40AF; border-color: #1E40AF;
