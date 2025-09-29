@@ -747,7 +747,7 @@ if st.session_state.active_page == 'Dashboard':
         selected_metric = st.selectbox("Selecione uma métrica para comparar:", options=metric_options)
         
         fig_comp = px.line(df_comp, x="Mês", y=selected_metric, color='Estratégia',
-                          color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': INFO_COLOR, 'Intercalar': WARNING_COLOR})
+                           color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': INFO_COLOR, 'Intercalar': WARNING_COLOR})
         apply_plot_theme(fig_comp, f'Comparativo de {selected_metric}', h=450)
         st.plotly_chart(fig_comp, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -779,14 +779,17 @@ if st.session_state.active_page == 'Dashboard':
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.markdown("##### 📈 Evolução do Patrimônio")
             fig_pat = go.Figure()
+            # --- INÍCIO DA CORREÇÃO ---
+            r, g, b = _hex_to_rgb(PRIMARY_COLOR)
             fig_pat.add_trace(go.Scatter(
                 x=df["Mês"], 
                 y=df["Patrimônio Líquido"], 
                 name="Patrimônio", 
                 line=dict(color=PRIMARY_COLOR, width=4),
                 fill='tozeroy',
-                fillcolor=f'{PRIMARY_COLOR}20'
+                fillcolor=f'rgba({r}, {g}, {b}, 0.2)' # CORRIGIDO: Usando formato rgba
             ))
+            # --- FIM DA CORREÇÃO ---
             apply_plot_theme(fig_pat, "Crescimento do Patrimônio Líquido")
             st.plotly_chart(fig_pat, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -799,9 +802,9 @@ if st.session_state.active_page == 'Dashboard':
                 "Categorias": ["Retiradas", "Fundo Total", "Caixa Final"]
             }
             fig_pie = px.pie(dist_data, values="Valores", names="Categorias",
-                             color="Categorias",
-                             color_discrete_map={"Retiradas": DANGER_COLOR, "Fundo Total": INFO_COLOR, "Caixa Final": WARNING_COLOR},
-                             hole=.5)
+                                 color="Categorias",
+                                 color_discrete_map={"Retiradas": DANGER_COLOR, "Fundo Total": INFO_COLOR, "Caixa Final": WARNING_COLOR},
+                                 hole=.5)
             apply_plot_theme(fig_pie, "Distribuição dos Recursos")
             st.plotly_chart(fig_pie, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
