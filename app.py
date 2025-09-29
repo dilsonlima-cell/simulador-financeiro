@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v9.3 com Correções de Lógica Financeira (FINAL)
+# Simulador Modular — v9.4 com Correções Finais de Interface e Lógica
 
 import streamlit as st
 import pandas as pd
@@ -138,7 +138,7 @@ st.markdown(f"""
         [data-testid="stSidebar"] h1 {{ color: #FFFFFF; font-weight: 700; font-size: 1.5rem; }}
         h1, h2, h3, h4, h5, h6 {{ color: {TEXT_COLOR}; font-weight: 600; }}
         .subhead {{ color: {MUTED_TEXT_COLOR}; font-size: 1.1rem; }}
-        .stButton > button {{ border-radius: 12px; border: 2px solid {PRIMARY_COLOR}; background-color: {PRIMARY_COLOR}; color: white; padding: 12px 24px; font-weight: 600; transition: all 0.3s ease; }}
+        .stButton > button {{ border-radius: 12px; border: 2px solid {PRIMARY_COLOR}; background-color: {PRIMARY_COLOR}; color: white; padding: 12px 24px; font-weight: 600; transition: all 0.3s ease; white-space: pre-line; text-align: center; }}
         .stButton > button:hover {{ background-color: #1E40AF; border-color: #1E40AF; transform: translateY(-2px); }}
         .stButton > button[kind="secondary"] {{ background-color: transparent; color: {PRIMARY_COLOR}; }}
         .stButton > button[kind="secondary"]:hover {{ background-color: rgba(37, 99, 235, .08); }}
@@ -159,7 +159,7 @@ st.markdown(f"""
 
 
 # ---------------------------
-# Motor de Simulação (CORRIGIDO E MELHORADO)
+# Motor de Simulação (CORRIGIDO E OTIMIZADO)
 # ---------------------------
 @st.cache_data
 def simulate(_config, reinvestment_strategy):
@@ -174,7 +174,7 @@ def simulate(_config, reinvestment_strategy):
     modules_owned = cfg_owned['modules_init']
     caixa = 0.0
     
-    # Investimento inicial: apenas custo dos módulos e entrada do terreno inicial
+    # Investimento inicial: módulos + entrada do terreno
     investimento_total = (
         modules_rented * cfg_rented['cost_per_module'] +
         modules_owned * cfg_owned['cost_per_module']
@@ -208,10 +208,9 @@ def simulate(_config, reinvestment_strategy):
         saldo_financiamento_terreno = valor_financiado
         if cfg_owned['land_installments'] > 0:
             parcela_terreno_inicial_atual = valor_financiado / cfg_owned['land_installments']
-        investimento_total += valor_entrada_terreno  # Apenas a entrada é investimento
+        investimento_total += valor_entrada_terreno
 
     for m in range(1, months + 1):
-        # Receita e manutenção baseados nos módulos atuais
         receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
         manut = (modules_rented * manut_p_mod_rented) + (modules_owned * manut_p_mod_owned)
         novos_modulos_comprados = 0
@@ -221,23 +220,21 @@ def simulate(_config, reinvestment_strategy):
         caixa += aporte_mes
         investimento_total += aporte_mes
 
-        # Gastos operacionais (aluguel e parcelas de terrenos novos)
+        # Gastos operacionais
         gastos_operacionais = aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente
-        
-        # Lucro operacional antes de considerar financiamento
         lucro_operacional = receita - manut - gastos_operacionais
         
-        # Parcela do terreno inicial (amortização de dívida, não é despesa operacional)
+        # Pagamento da parcela do terreno inicial (reduz caixa e passivo)
         parcela_terreno_inicial_mes = 0.0
         if saldo_financiamento_terreno > 0:
             parcela_terreno_inicial_mes = min(parcela_terreno_inicial_atual, saldo_financiamento_terreno)
             saldo_financiamento_terreno -= parcela_terreno_inicial_mes
 
-        # Caixa é afetado pelo lucro operacional e pelo pagamento da parcela do terreno
+        # Atualizar caixa
         caixa += lucro_operacional
-        caixa -= parcela_terreno_inicial_mes  # Pagamento da dívida reduz o caixa
+        caixa -= parcela_terreno_inicial_mes
 
-        # Distribuição do lucro operacional (se positivo)
+        # Distribuição do lucro operacional
         fundo_mes_total = 0.0
         retirada_mes_efetiva = 0.0
         if lucro_operacional > 0:
@@ -245,7 +242,6 @@ def simulate(_config, reinvestment_strategy):
             retirada_potencial = sum(base_distribuicao * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
             fundo_potencial = sum(base_distribuicao * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
             
-            # Aplicar teto de retirada
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
                 excesso = retirada_potencial - cfg_global['max_withdraw_value']
                 retirada_mes_efetiva = cfg_global['max_withdraw_value']
@@ -254,7 +250,6 @@ def simulate(_config, reinvestment_strategy):
                 retirada_mes_efetiva = retirada_potencial
                 fundo_mes_total = fundo_potencial
 
-            # Verificar se há caixa suficiente para a distribuição
             total_distribuicao = retirada_mes_efetiva + fundo_mes_total
             if total_distribuicao > caixa:
                 if caixa > 0:
@@ -265,14 +260,12 @@ def simulate(_config, reinvestment_strategy):
                     retirada_mes_efetiva = 0.0
                     fundo_mes_total = 0.0
 
-        # Atualizar caixa e acumulados
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
 
-        # Reinvestimento (no final do ano)
+        # Reinvestimento (final do ano)
         if m % 12 == 0:
-            # Estratégia de compra: apenas para módulos próprios (compra real)
             if reinvestment_strategy == 'buy':
                 custo_expansao = custo_modulo_atual_owned
                 if caixa >= custo_expansao and custo_expansao > 0:
@@ -284,22 +277,7 @@ def simulate(_config, reinvestment_strategy):
                         modules_owned += novos_modulos_comprados
                         parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
 
-            elif reinvestment_strategy == 'rent':
-                # Para aluguel, não há "compra", mas podemos expandir se o caixa cobrir o aluguel adicional
-                # Aqui, vamos assumir que a expansão por aluguel não requer desembolso inicial,
-                # então o reinvestimento é ilimitado (ou baseado em critério de caixa para aluguel futuro).
-                # Como não há desembolso, não reduzimos o caixa aqui.
-                # Mas para manter a lógica, vamos permitir expansão proporcional ao caixa / aluguel mensal.
-                if aluguel_p_novo_mod > 0:
-                    # Quantos módulos podemos alugar com base no caixa (como reserva para 12 meses de aluguel?)
-                    # Simplificação: não expandimos por aluguel via reinvestimento automático.
-                    # Deixamos como 0, pois não há custo inicial.
-                    novos_modulos_comprados = 0
-                else:
-                    novos_modulos_comprados = 0
-
             elif reinvestment_strategy == 'alternate':
-                # Intercalar: só compramos módulos próprios (com desembolso)
                 if compra_intercalada_counter % 2 == 0:
                     custo_expansao = custo_modulo_atual_owned
                     if caixa >= custo_expansao and custo_expansao > 0:
@@ -312,8 +290,7 @@ def simulate(_config, reinvestment_strategy):
                             parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
                             compra_intercalada_counter += novos_modulos_comprados
                 else:
-                    # Não expandimos por aluguel automaticamente
-                    novos_modulos_comprados = 0
+                    # Não expande por aluguel automaticamente
                     compra_intercalada_counter += 1
 
             # Correção monetária anual
@@ -330,15 +307,11 @@ def simulate(_config, reinvestment_strategy):
             aluguel_p_novo_mod *= correction_factor
             parcela_p_novo_terreno *= correction_factor
 
-        # Cálculo do Patrimônio Líquido:
-        # Ativos = (módulos próprios * custo atual) + caixa + fundo acumulado
-        # Passivos = saldo do financiamento do terreno
-        # NOTA: Terrenos adicionais já estão incluídos no custo dos módulos próprios
+        # Patrimônio Líquido = Ativos - Passivos
         ativos = (modules_owned * custo_modulo_atual_owned) + caixa + fundo_ac
         passivos = saldo_financiamento_terreno
         patrimonio_liquido = ativos - passivos
 
-        # Gastos totais para exibição
         gastos_totais = manut + aluguel_mensal_corrente + parcela_terreno_inicial_mes + parcelas_terrenos_novos_mensal_corrente
 
         rows.append({
@@ -527,18 +500,25 @@ if st.session_state.active_page == 'Dashboard':
         st.markdown("### 🎯 Estratégias de Reinvestimento")
         strat_cols = st.columns(3)
         config_copy = deepcopy(st.session_state.config)
-        if strat_cols[0].button("**🏠 Comprar Novos**<br><small>Aquisição de terrenos próprios</small>", use_container_width=True):
-            with st.spinner("Calculando..."):
-                st.session_state.simulation_df = simulate(config_copy, 'buy')
-                st.session_state.comparison_df = pd.DataFrame()
-        if strat_cols[1].button("**🏢 Alugar Novos**<br><small>Expansão com aluguel de terrenos</small>", use_container_width=True):
-            with st.spinner("Calculando..."):
-                st.session_state.simulation_df = simulate(config_copy, 'rent')
-                st.session_state.comparison_df = pd.DataFrame()
-        if strat_cols[2].button("**🔄 Intercalar Novos**<br><small>Mix entre compra e aluguel</small>", use_container_width=True):
-            with st.spinner("Calculando..."):
-                st.session_state.simulation_df = simulate(config_copy, 'alternate')
-                st.session_state.comparison_df = pd.DataFrame()
+
+        with strat_cols[0]:
+            if st.button("🏠 Comprar Novos\n(Aquisição de terrenos próprios)", use_container_width=True):
+                with st.spinner("Calculando..."):
+                    st.session_state.simulation_df = simulate(config_copy, 'buy')
+                    st.session_state.comparison_df = pd.DataFrame()
+
+        with strat_cols[1]:
+            if st.button("🏢 Alugar Novos\n(Expansão com aluguel de terrenos)", use_container_width=True):
+                with st.spinner("Calculando..."):
+                    st.session_state.simulation_df = simulate(config_copy, 'rent')
+                    st.session_state.comparison_df = pd.DataFrame()
+
+        with strat_cols[2]:
+            if st.button("🔄 Intercalar Novos\n(Mix entre compra e aluguel)", use_container_width=True):
+                with st.spinner("Calculando..."):
+                    st.session_state.simulation_df = simulate(config_copy, 'alternate')
+                    st.session_state.comparison_df = pd.DataFrame()
+
         st.markdown("<hr style='margin: 1rem 0; border-color: #334155;'>", unsafe_allow_html=True)
         if st.button("📊 Comparar Todas as Estratégias", use_container_width=True):
             with st.spinner("Calculando as três simulações..."):
