@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — Versão Consolidada com Campos Automáticos
+# Simulador Modular — v4 com Gerenciamento de Cenários
 
 import streamlit as st
 import pandas as pd
@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from io import BytesIO
 import re
+import copy # Importado para copiar configurações de cenário
 
 # --- PALETA DE CORES E CONFIGURAÇÕES ---
 PRIMARY_COLOR = "#0072B2"
@@ -121,7 +122,7 @@ def slug(s: str) -> str:
     return s[:60]
 
 # ---------------------------
-# Motor de Simulação (Atualizado)
+# Motor de Simulação
 # ---------------------------
 @st.cache_data
 def simulate(_config, reinvestment_strategy):
@@ -139,7 +140,6 @@ def simulate(_config, reinvestment_strategy):
     retiradas_ac = 0.0
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
     custo_modulo_atual_owned = cfg_owned['cost_per_module']
-    # ALTERAÇÃO: Variável restaurada para calcular o valor de terrenos adicionais.
     valor_terrenos_adicionais = 0.0
 
     valor_entrada_terreno = 0.0
@@ -202,11 +202,9 @@ def simulate(_config, reinvestment_strategy):
                     if reinvestment_strategy == 'buy':
                         modules_owned += novos_modulos_comprados
                         parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * cfg_owned['monthly_land_plot_parcel']
-                        # ALTERAÇÃO: Lógica para adicionar valor de terrenos novos ao patrimônio foi restaurada.
                         valor_terrenos_adicionais += novos_modulos_comprados * cfg_owned['land_value_per_module']
                     elif reinvestment_strategy == 'rent':
                         modules_rented += novos_modulos_comprados
-                        # ALTERAÇÃO: Lógica de aumento do aluguel restaurada.
                         aluguel_mensal_corrente += novos_modulos_comprados * cfg_rented['rent_per_new_module']
                     elif reinvestment_strategy == 'alternate':
                         for _ in range(novos_modulos_comprados):
@@ -240,7 +238,7 @@ def simulate(_config, reinvestment_strategy):
 
 
 # ---------------------------
-# Inicialização e Gerenciamento do Estado (Atualizado)
+# Inicialização e Gerenciamento do Estado
 # ---------------------------
 def get_default_config():
     """Retorna a configuração padrão do simulador."""
@@ -248,16 +246,12 @@ def get_default_config():
         'rented': {
             'modules_init': 1, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0,
             'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
-            'rent_value': 750.0,
-            # ALTERAÇÃO: Campo restaurado.
-            'rent_per_new_module': 950.0 # Soma de maintenance (200) + rent_value (750)
+            'rent_value': 750.0, 'rent_per_new_module': 950.0
         },
         'owned': {
             'modules_init': 0, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0,
             'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
-            'monthly_land_plot_parcel': 0.0,
-             # ALTERAÇÃO: Campo restaurado.
-            'land_value_per_module': 200.0, # Soma de parcel (0) + maintenance (200)
+            'monthly_land_plot_parcel': 0.0, 'land_value_per_module': 200.0,
             'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120
         },
         'global': {
@@ -272,6 +266,8 @@ if 'config' not in st.session_state:
 if 'simulation_df' not in st.session_state: st.session_state.simulation_df = pd.DataFrame()
 if 'comparison_df' not in st.session_state: st.session_state.comparison_df = pd.DataFrame()
 if 'active_page' not in st.session_state: st.session_state.active_page = 'Dashboard'
+# NOVO: Inicializa o dicionário para salvar cenários.
+if 'saved_scenarios' not in st.session_state: st.session_state.saved_scenarios = {}
 
 
 # ---------------------------
@@ -286,12 +282,46 @@ with st.sidebar:
     )
 
 # ---------------------------
-# PÁGINA DE CONFIGURAÇÕES (Atualizada)
+# PÁGINA DE CONFIGURAÇÕES (Atualizada com Gerenciador de Cenários)
 # ---------------------------
 if st.session_state.active_page == 'Configurações':
     st.title("Configurações de Investimento")
-    st.markdown("<p class='subhead'>Ajuste os parâmetros da simulação financeira e adicione eventos.</p>", unsafe_allow_html=True)
-    if st.button("🔄 Resetar Configurações", type="secondary"):
+    st.markdown("<p class='subhead'>Ajuste os parâmetros da simulação, salve e carregue cenários.</p>", unsafe_allow_html=True)
+
+    # NOVO: Painel para Gerenciamento de Cenários
+    with st.expander("📁 Gerenciamento de Cenários", expanded=True):
+        sc_c1, sc_c2 = st.columns([3,2])
+        
+        with sc_c1: # Salvar
+            new_scenario_name = st.text_input("Nome do Novo Cenário", placeholder="Ex: Cenário Otimista")
+            if st.button("💾 Salvar Cenário Atual", use_container_width=True):
+                if new_scenario_name:
+                    st.session_state.saved_scenarios[new_scenario_name] = copy.deepcopy(st.session_state.config)
+                    st.success(f"Cenário '{new_scenario_name}' salvo com sucesso!")
+                    st.rerun()
+                else:
+                    st.warning("Por favor, digite um nome para o cenário.")
+        
+        with sc_c2: # Carregar e Deletar
+            if st.session_state.saved_scenarios:
+                scenario_to_load = st.selectbox(
+                    "Carregar ou Deletar Cenário",
+                    options=[""] + list(st.session_state.saved_scenarios.keys()),
+                    format_func=lambda x: "Selecione..." if x == "" else x,
+                    label_visibility="collapsed"
+                )
+                if scenario_to_load:
+                    b_c1, b_c2 = st.columns(2)
+                    if b_c1.button("📂 Carregar", use_container_width=True):
+                        st.session_state.config = copy.deepcopy(st.session_state.saved_scenarios[scenario_to_load])
+                        st.success(f"Cenário '{scenario_to_load}' carregado.")
+                        st.rerun()
+                    if b_c2.button("🗑️ Deletar", use_container_width=True, type="secondary"):
+                        del st.session_state.saved_scenarios[scenario_to_load]
+                        st.success(f"Cenário '{scenario_to_load}' deletado.")
+                        st.rerun()
+
+    if st.button("🔄 Resetar Configurações Atuais", type="secondary"):
         st.session_state.config = get_default_config()
         st.rerun()
 
@@ -307,14 +337,8 @@ if st.session_state.active_page == 'Configurações':
     cfg_r['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_r['cost_correction_rate'], format="%.1f", key="rent_corr_rate")
     cfg_r['rent_value'] = c2.number_input("Aluguel mensal fixo (R$)", 0.0, value=cfg_r['rent_value'], format="%.2f", key="rent_base_rent")
     
-    # ALTERAÇÃO: Cálculo automático e exibição do campo restaurado.
     cfg_r['rent_per_new_module'] = cfg_r['maintenance_per_module'] + cfg_r['rent_value']
-    c1.number_input(
-        "Custo de aluguel por novo módulo (R$)", 0.0,
-        value=cfg_r['rent_per_new_module'], format="%.2f",
-        key="rent_new_rent", disabled=True,
-        help="Preenchido automaticamente (Manutenção + Aluguel Fixo)."
-    )
+    c1.number_input("Custo de aluguel por novo módulo (R$)", 0.0, value=cfg_r['rent_per_new_module'], format="%.2f", key="rent_new_rent", disabled=True, help="Preenchido automaticamente (Manutenção + Aluguel Fixo).")
     st.markdown('</div><br>', unsafe_allow_html=True)
 
     # Card: Terreno Comprado
@@ -345,22 +369,10 @@ if st.session_state.active_page == 'Configurações':
     cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
     cfg_o['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_o['cost_correction_rate'], format="%.1f", key="own_corr_rate")
     
-    cfg_o['monthly_land_plot_parcel'] = c2.number_input(
-        "Parcela mensal por novo terreno (R$)", 0.0, 
-        value=cfg_o.get('monthly_land_plot_parcel', 0.0), 
-        format="%.2f", key="own_land_parcel", 
-        disabled=(cfg_o['land_total_value'] > 0), 
-        help="Este valor é preenchido automaticamente se um financiamento de terreno inicial for configurado."
-    )
+    cfg_o['monthly_land_plot_parcel'] = c2.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=cfg_o.get('monthly_land_plot_parcel', 0.0), format="%.2f", key="own_land_parcel", disabled=(cfg_o['land_total_value'] > 0), help="Este valor é preenchido automaticamente se um financiamento de terreno inicial for configurado.")
     
-    # ALTERAÇÃO: Cálculo automático e exibição do campo restaurado.
     cfg_o['land_value_per_module'] = cfg_o['monthly_land_plot_parcel'] + cfg_o['maintenance_per_module']
-    c1.number_input(
-        "Valor do terreno por novo módulo (R$)", 0.0,
-        value=cfg_o['land_value_per_module'], format="%.2f",
-        key="own_land_value_per_module", disabled=True,
-        help="Preenchido automaticamente (Parcela do Terreno + Manutenção)."
-    )
+    c1.number_input("Valor do terreno por novo módulo (R$)", 0.0, value=cfg_o['land_value_per_module'], format="%.2f", key="own_land_value_per_module", disabled=True, help="Preenchido automaticamente (Parcela do Terreno + Manutenção).")
     st.markdown('</div><br>', unsafe_allow_html=True)
 
     # Card: Parâmetros Globais e Eventos Financeiros (sem alterações)
@@ -412,7 +424,7 @@ if st.session_state.active_page == 'Configurações':
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------
-# PÁGINA DO DASHBOARD
+# PÁGINAS DO DASHBOARD E RELATÓRIOS (sem alterações de funcionalidade)
 # ---------------------------
 if st.session_state.active_page == 'Dashboard':
     st.title("Dashboard Estratégico")
@@ -490,12 +502,8 @@ if st.session_state.active_page == 'Dashboard':
             fig_pie.update_layout(title="Distribuição Final dos Recursos", height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.1), paper_bgcolor=CARD_COLOR)
             st.plotly_chart(fig_pie, use_container_width=True)
     else:
-        st.info("👆 Escolha uma estratégia ou compare todas para iniciar a simulação.")
+        st.info("👆 Vá para 'Configurações' para definir seus parâmetros, depois escolha uma estratégia ou compare todas para iniciar a simulação.")
 
-
-# ---------------------------
-# PÁGINA DE RELATÓRIOS E DADOS
-# ---------------------------
 if st.session_state.active_page == 'Relatórios e Dados':
     st.title("Relatórios e Dados")
     st.markdown("<p class='subhead'>Explore os dados detalhados da simulação mês a mês.</p>", unsafe_allow_html=True)
