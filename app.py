@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v5 com Melhorias de UI/UX e Robustez
+# Simulador Modular — v6 com Tema Azul Corporativo
 
 import streamlit as st
 import pandas as pd
@@ -9,7 +9,7 @@ import plotly.express as px
 from io import BytesIO
 import re
 
-# --- PALETA DE CORES E CONFIGURAÇÕES (ATUALIZADA) ---
+# --- PALETA DE CORES E CONFIGURAÇÕES (TEMA AZUL) ---
 PRIMARY_COLOR = "#2563EB"
 SUCCESS_COLOR = "#16A34A"
 DANGER_COLOR  = "#DC2626"
@@ -17,7 +17,8 @@ WARNING_COLOR = "#D97706"
 INFO_COLOR    = "#0E7490"
 DARK_BACKGROUND  = "#0B1221"
 LIGHT_BACKGROUND = "#F3F6FB"
-TEXT_COLOR       = "#0F172A"
+# ATUALIZADO: Cor principal do texto agora é um azul corporativo escuro
+TEXT_COLOR       = "#1E3A8A"
 CARD_COLOR       = "#FFFFFF"
 MUTED_TEXT_COLOR = "#475569"
 TABLE_BORDER_COLOR = "#E2E8F0"
@@ -31,7 +32,7 @@ MONEY_COLS = {
 COUNT_COLS = {"Mês", "Ano", "Módulos Ativos", "Módulos Alugados", "Módulos Próprios", "Módulos Comprados no Ano"}
 
 
-# --- FUNÇÕES HELPER (ATUALIZADAS) ---
+# --- FUNÇÕES HELPER ---
 
 def _hex_to_rgb(h):
     h = h.lstrip("#")
@@ -103,7 +104,7 @@ def apply_plot_theme(fig, title=None, h=420):
     return fig
 
 # ---------------------------
-# CSS - Estilos da Página (ATUALIZADO)
+# CSS - Estilos da Página
 # ---------------------------
 st.set_page_config(page_title="Simulador Modular", layout="wide", initial_sidebar_state="expanded")
 st.markdown(f"""
@@ -111,14 +112,19 @@ st.markdown(f"""
         .main .block-container {{ padding: 1.5rem 2rem; }}
         .stApp {{ background-color: {LIGHT_BACKGROUND}; }}
         [data-testid="stSidebar"] {{ background-color: #111827; }}
+        /* Cor de texto na sidebar mantida como clara para contraste com fundo escuro */
         [data-testid="stSidebar"] * {{ color: #E5E7EB; }}
         [data-testid="stSidebar"] h1 {{ color: #FFFFFF; }}
+        
+        /* Cor principal do texto da aplicação agora usa TEXT_COLOR (azul escuro) */
         h1, h2, h3, h4, h5, h6, label, p, span {{ color: {TEXT_COLOR}; }}
         .subhead {{ color: {MUTED_TEXT_COLOR}; }}
+        
         .stButton > button {{
             border-radius: 8px;
             border: 1px solid {PRIMARY_COLOR};
             background-color: {PRIMARY_COLOR};
+            /* Cor de texto no botão mantida como branca para contraste */
             color: #FFFFFF; padding: 10px 16px; font-weight: 600;
         }}
         .stButton > button:hover {{
@@ -445,7 +451,7 @@ if st.session_state.active_page == 'Configurações':
 
 
 # ---------------------------
-# PÁGINA DO DASHBOARD (LAYOUT ATUALIZADO)
+# PÁGINA DO DASHBOARD
 # ---------------------------
 if st.session_state.active_page == 'Dashboard':
     st.title("Dashboard Estratégico")
@@ -539,7 +545,7 @@ if st.session_state.active_page == 'Dashboard':
 
 
 # ---------------------------
-# PÁGINA DE RELATÓRIOS E DADOS (ROBUSTEZ ATUALIZADA)
+# PÁGINA DE RELATÓRIOS E DADOS
 # ---------------------------
 if st.session_state.active_page == 'Relatórios e Dados':
     st.title("Relatórios e Dados")
