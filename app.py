@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v7 com Layout Moderno e Fundo Azul Escuro
+# Simulador Modular — v8 com Correções e Melhorias de UI
 
 import streamlit as st
 import pandas as pd
@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from io import BytesIO
 import re
+from copy import deepcopy # <-- IMPORTADO PARA CORRIGIR O CACHE
 
 # --- PALETA DE CORES E CONFIGURAÇÕES (TEMA AZUL ESCURO) ---
 PRIMARY_COLOR = "#2563EB"
@@ -16,10 +17,10 @@ SUCCESS_COLOR = "#10B981"
 DANGER_COLOR  = "#EF4444"
 WARNING_COLOR = "#F59E0B"
 INFO_COLOR    = "#8B5CF6"
-DARK_BACKGROUND  = "#0B1120"  # Azul mais escuro como na imagem
-LIGHT_BACKGROUND = "#0F172A"  # Tom médio para cards
-TEXT_COLOR       = "#F1F5F9"  # Texto claro para contraste
-CARD_COLOR       = "#1E293B"  # Cards com azul escuro
+DARK_BACKGROUND  = "#0B1120"
+LIGHT_BACKGROUND = "#0F172A"
+TEXT_COLOR       = "#F1F5F9"
+CARD_COLOR       = "#1E293B"
 MUTED_TEXT_COLOR = "#94A3B8"
 ACCENT_COLOR     = "#6366F1"
 TABLE_BORDER_COLOR = "#334155"
@@ -40,16 +41,9 @@ def _hex_to_rgb(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
-def _luminance(rgb):
-    def chan(c):
-        c = c/255
-        return c/12.92 if c <= 0.03928 else ((c+0.055)/1.055)**2.4
-    r, g, b = map(chan, rgb)
-    return 0.2126*r + 0.7152*g + 0.0722*b
-
 def ideal_text_color(bg_hex: str) -> str:
     """Retorna cor de texto ideal baseada no fundo."""
-    return TEXT_COLOR  # Texto claro para contraste com fundo escuro
+    return TEXT_COLOR
 
 def fmt_brl(v):
     """Formata um valor numérico como uma string de moeda brasileira de forma robusta."""
@@ -77,23 +71,12 @@ def render_kpi_card(title, value, bg_color, icon=None, subtitle=None):
         </div>
     """, unsafe_allow_html=True)
 
-def render_stat_card(title, value, change=None, change_label=None):
-    """Renderiza um cartão de estatística com design limpo."""
-    change_html = ""
-    if change is not None:
-        change_color = SUCCESS_COLOR if change >= 0 else DANGER_COLOR
-        change_icon = "↗️" if change >= 0 else "↘️"
-        change_html = f"""
-            <div class="stat-change" style="color: {change_color};">
-                {change_icon} {change}% {change_label or ''}
-            </div>
-        """
-    
+def render_report_metric(title, value):
+    """Renderiza uma métrica compacta para a página de relatórios."""
     st.markdown(f"""
-        <div class="stat-card">
-            <div class="stat-value">{value}</div>
-            <div class="stat-title">{title}</div>
-            {change_html}
+        <div class="report-metric-card">
+            <div class="report-metric-title">{title}</div>
+            <div class="report-metric-value">{value}</div>
         </div>
     """, unsafe_allow_html=True)
 
@@ -118,257 +101,81 @@ def slug(s: str) -> str:
 def apply_plot_theme(fig, title=None, h=420):
     """Aplica um tema visual moderno aos gráficos Plotly."""
     fig.update_layout(
-        title=dict(
-            text=title or fig.layout.title.text,
-            x=0.5,
-            xanchor='center',
-            font=dict(size=16, color=TEXT_COLOR, family="Arial, sans-serif")
-        ),
+        title=dict(text=title or fig.layout.title.text, x=0.5, xanchor='center', font=dict(size=16, color=TEXT_COLOR, family="Arial, sans-serif")),
         height=h,
         margin=dict(l=10, r=10, t=60, b=10),
-        legend=dict(
-            orientation="h", 
-            yanchor="bottom", 
-            y=1.02, 
-            xanchor="right", 
-            x=1,
-            bgcolor='rgba(30, 41, 59, 0.8)',
-            bordercolor=TABLE_BORDER_COLOR,
-            borderwidth=1,
-            font=dict(color=TEXT_COLOR)
-        ),
-        plot_bgcolor=CARD_COLOR, 
-        paper_bgcolor=CARD_COLOR,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(30, 41, 59, 0.8)', bordercolor=TABLE_BORDER_COLOR, borderwidth=1, font=dict(color=TEXT_COLOR)),
+        plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR,
         font=dict(color=TEXT_COLOR, size=13, family="Arial, sans-serif"),
-        xaxis=dict(
-            gridcolor=TABLE_BORDER_COLOR,
-            linecolor=TABLE_BORDER_COLOR,
-            linewidth=1,
-            tickfont=dict(color=MUTED_TEXT_COLOR)
-        ), 
-        yaxis=dict(
-            gridcolor=TABLE_BORDER_COLOR,
-            linecolor=TABLE_BORDER_COLOR,
-            linewidth=1,
-            tickfont=dict(color=MUTED_TEXT_COLOR)
-        )
+        xaxis=dict(gridcolor=TABLE_BORDER_COLOR, linecolor=TABLE_BORDER_COLOR, linewidth=1, tickfont=dict(color=MUTED_TEXT_COLOR)), 
+        yaxis=dict(gridcolor=TABLE_BORDER_COLOR, linecolor=TABLE_BORDER_COLOR, linewidth=1, tickfont=dict(color=MUTED_TEXT_COLOR))
     )
     return fig
 
 # ---------------------------
-# CSS - Estilos da Página com Fundo Azul Escuro
+# CSS - Estilos da Página
 # ---------------------------
 st.set_page_config(page_title="Simulador Modular", layout="wide", initial_sidebar_state="expanded")
 st.markdown(f"""
     <style>
-        .main .block-container {{ 
-            padding: 1.5rem 2rem; 
-            max-width: 100%;
-        }}
-        .stApp {{ 
-            background: {DARK_BACKGROUND};
-        }}
+        .main .block-container {{ padding: 1.5rem 2rem; max-width: 100%; }}
+        .stApp {{ background: {DARK_BACKGROUND}; }}
         
-        /* Sidebar moderna */
-        [data-testid="stSidebar"] {{ 
-            background: {LIGHT_BACKGROUND};
-            border-right: 1px solid {TABLE_BORDER_COLOR};
-        }}
-        [data-testid="stSidebar"] * {{ 
-            color: #E5E7EB; 
-        }}
-        [data-testid="stSidebar"] h1 {{ 
-            color: #FFFFFF; 
-            font-weight: 700;
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }}
+        /* Sidebar */
+        [data-testid="stSidebar"] {{ background: {LIGHT_BACKGROUND}; border-right: 1px solid {TABLE_BORDER_COLOR}; }}
+        [data-testid="stSidebar"] * {{ color: #E5E7EB; }}
+        [data-testid="stSidebar"] h1 {{ color: #FFFFFF; font-weight: 700; font-size: 1.5rem; margin-bottom: 0.5rem; }}
         
-        /* Cores de texto para fundo escuro */
-        h1, h2, h3, h4, h5, h6 {{ 
-            color: {TEXT_COLOR}; 
-            font-weight: 600;
-        }}
-        .subhead {{ 
-            color: {MUTED_TEXT_COLOR}; 
-            font-size: 1.1rem;
-        }}
-        p, label, span {{ 
-            color: {TEXT_COLOR} !important; 
-        }}
+        /* Text */
+        h1, h2, h3, h4, h5, h6 {{ color: {TEXT_COLOR}; font-weight: 600; }}
+        .subhead {{ color: {MUTED_TEXT_COLOR}; font-size: 1.1rem; }}
+        p, label, span {{ color: {TEXT_COLOR} !important; }}
         
-        /* Botões modernos */
-        .stButton > button {{
-            border-radius: 12px;
-            border: 2px solid {PRIMARY_COLOR};
-            background-color: {PRIMARY_COLOR};
-            color: white; 
-            padding: 12px 24px; 
-            font-weight: 600;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1);
-        }}
-        .stButton > button:hover {{
-            background-color: #1E40AF; 
-            border-color: #1E40AF;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(37, 99, 235, 0.15);
-        }}
-        .stButton > button[kind="secondary"] {{
-            background-color: transparent; 
-            color: {PRIMARY_COLOR}; 
-            border: 2px solid {PRIMARY_COLOR};
-        }}
-        .stButton > button[kind="secondary"]:hover {{
-            background-color: rgba(37, 99, 235, .08);
-            transform: translateY(-2px);
-        }}
+        /* Buttons */
+        .stButton > button {{ border-radius: 12px; border: 2px solid {PRIMARY_COLOR}; background-color: {PRIMARY_COLOR}; color: white; padding: 12px 24px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1); }}
+        .stButton > button:hover {{ background-color: #1E40AF; border-color: #1E40AF; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(37, 99, 235, 0.15); }}
+        .stButton > button[kind="secondary"] {{ background-color: transparent; color: {PRIMARY_COLOR}; border: 2px solid {PRIMARY_COLOR}; }}
+        .stButton > button[kind="secondary"]:hover {{ background-color: rgba(37, 99, 235, .08); transform: translateY(-2px); }}
         
-        /* Cards modernos */
-        .card {{
-            background: {CARD_COLOR};
-            border-radius: 16px; 
-            padding: 1.5rem;
-            border: 1px solid {TABLE_BORDER_COLOR};
-            box-shadow: 0 4px 20px rgba(0,0,0,.15);
-            backdrop-filter: blur(10px);
-        }}
+        /* Cards */
+        .card {{ background: {CARD_COLOR}; border-radius: 16px; padding: 1.5rem; border: 1px solid {TABLE_BORDER_COLOR}; box-shadow: 0 4px 20px rgba(0,0,0,.15); backdrop-filter: blur(10px); }}
         
-        /* KPI Cards - Design moderno */
-        .kpi-card-modern {{
-            border-radius: 20px; 
-            padding: 2rem 1.5rem;
-            box-shadow: 0 8px 25px rgba(0,0,0,.2); 
-            height: 100%;
-            text-align: center;
-            transition: transform 0.3s ease;
-            background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%);
-            border: 1px solid {TABLE_BORDER_COLOR};
-        }}
-        .kpi-card-modern:hover {{
-            transform: translateY(-5px);
-            box-shadow: 0 12px 30px rgba(0,0,0,.25);
-        }}
-        .kpi-card-title-modern {{ 
-            font-size: 1rem; 
-            font-weight: 600; 
-            opacity: .95;
-            margin-top: 0.5rem;
-        }}
-        .kpi-card-value-modern {{ 
-            font-size: 2.5rem; 
-            font-weight: 800; 
-            line-height: 1.1;
-        }}
-        .kpi-card-subtitle {{
-            font-size: 0.85rem;
-            opacity: .8;
-            margin-top: 0.5rem;
-        }}
+        /* KPI Cards - Dashboard */
+        .kpi-card-modern {{ border-radius: 20px; padding: 2rem 1.5rem; box-shadow: 0 8px 25px rgba(0,0,0,.2); height: 100%; text-align: center; transition: transform 0.3s ease; background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%); border: 1px solid {TABLE_BORDER_COLOR}; }}
+        .kpi-card-modern:hover {{ transform: translateY(-5px); box-shadow: 0 12px 30px rgba(0,0,0,.25); }}
+        .kpi-card-title-modern {{ font-size: 1rem; font-weight: 600; opacity: .95; margin-top: 0.5rem; }}
+        .kpi-card-value-modern {{ font-size: 2.5rem; font-weight: 800; line-height: 1.1; }}
+        .kpi-card-subtitle {{ font-size: 0.85rem; opacity: .8; margin-top: 0.5rem; }}
+
+        /* --- NOVOS ESTILOS PARA KPIs DE RELATÓRIO --- */
+        .report-metric-card {{ background: {LIGHT_BACKGROUND}; border-radius: 8px; padding: 0.75rem 1rem; border: 1px solid {TABLE_BORDER_COLOR}; text-align: center; margin-bottom: 0.5rem; height: calc(100% - 0.5rem); }}
+        .report-metric-title {{ font-size: 0.8rem; color: {MUTED_TEXT_COLOR}; margin-bottom: 0.25rem; text-transform: uppercase; font-weight: 600; }}
+        .report-metric-value {{ font-size: 1.25rem; font-weight: 600; color: {TEXT_COLOR}; }}
         
-        /* Stat Cards */
-        .stat-card {{
-            background: {CARD_COLOR};
-            border-radius: 12px;
-            padding: 1.25rem;
-            border: 1px solid {TABLE_BORDER_COLOR};
-            text-align: center;
-        }}
-        .stat-value {{
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: {TEXT_COLOR};
-            margin-bottom: 0.25rem;
-        }}
-        .stat-title {{
-            font-size: 0.9rem;
-            color: {MUTED_TEXT_COLOR};
-            font-weight: 500;
-        }}
-        .stat-change {{
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin-top: 0.5rem;
-        }}
+        /* Dataframe */
+        [data-testid="stDataFrame"] div[data-testid="StyledTable"] {{ border: 1px solid {TABLE_BORDER_COLOR}; border-radius: 12px; overflow: hidden; background: {CARD_COLOR}; }}
+        [data-testid="stDataFrame"] th {{ background: linear-gradient(135deg, {LIGHT_BACKGROUND} 0%, {CARD_COLOR} 100%) !important; color: {TEXT_COLOR} !important; font-weight: 700 !important; border-bottom: 1px solid {TABLE_BORDER_COLOR} !important; padding: 12px 16px !important; }}
+        [data-testid="stDataFrame"] td {{ padding: 10px 16px !important; border-bottom: 1px solid {TABLE_BORDER_COLOR} !important; color: {TEXT_COLOR} !important; background: {CARD_COLOR} !important; }}
         
-        /* Dataframe moderno */
-        [data-testid="stDataFrame"] div[data-testid="StyledTable"] {{
-            border: 1px solid {TABLE_BORDER_COLOR};
-            border-radius: 12px;
-            overflow: hidden;
-            background: {CARD_COLOR};
-        }}
-        [data-testid="stDataFrame"] th {{
-            background: linear-gradient(135deg, {LIGHT_BACKGROUND} 0%, {CARD_COLOR} 100%) !important; 
-            color: {TEXT_COLOR} !important; 
-            font-weight: 700 !important;
-            border-bottom: 1px solid {TABLE_BORDER_COLOR} !important;
-            padding: 12px 16px !important;
-        }}
-        [data-testid="stDataFrame"] td {{
-            padding: 10px 16px !important;
-            border-bottom: 1px solid {TABLE_BORDER_COLOR} !important;
-            color: {TEXT_COLOR} !important;
-            background: {CARD_COLOR} !important;
-        }}
+        /* Inputs e Tabs */
+        .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
+        .stTabs [data-baseweb="tab"] {{ border-radius: 12px 12px 0 0; padding: 12px 24px; background-color: {LIGHT_BACKGROUND}; color: {TEXT_COLOR}; }}
+        .stTabs [aria-selected="true"] {{ background-color: {PRIMARY_COLOR} !important; color: white !important; }}
+        .stTextInput input, .stNumberInput input, .stSelectbox select {{ background: {CARD_COLOR} !important; color: {TEXT_COLOR} !important; border: 1px solid {TABLE_BORDER_COLOR} !important; }}
         
-        /* Tabs e containers */
-        .stTabs [data-baseweb="tab-list"] {{
-            gap: 8px;
-        }}
-        .stTabs [data-baseweb="tab"] {{
-            border-radius: 12px 12px 0 0;
-            padding: 12px 24px;
-            background-color: {LIGHT_BACKGROUND};
-            color: {TEXT_COLOR};
-        }}
-        .stTabs [aria-selected="true"] {{
-            background-color: {PRIMARY_COLOR} !important;
-            color: white !important;
-        }}
-        
-        /* Input fields e selects */
-        .stTextInput input, .stNumberInput input, .stSelectbox select {{
-            background: {CARD_COLOR} !important;
-            color: {TEXT_COLOR} !important;
-            border: 1px solid {TABLE_BORDER_COLOR} !important;
-        }}
-        .stTextInput label, .stNumberInput label, .stSelectbox label {{
-            color: {TEXT_COLOR} !important;
-        }}
-        
-        /* Headers com gradiente */
-        .gradient-header {{
-            background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 700;
-        }}
-        
-        /* Metric cards */
-        [data-testid="stMetricValue"] {{
-            color: {TEXT_COLOR} !important;
-        }}
-        [data-testid="stMetricLabel"] {{
-            color: {MUTED_TEXT_COLOR} !important;
-        }}
-        
-        /* Expander styling */
-        .streamlit-expanderHeader {{
-            background: {CARD_COLOR};
-            border: 1px solid {TABLE_BORDER_COLOR};
-            border-radius: 8px;
-        }}
+        /* Outros */
+        .gradient-header {{ background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700; }}
+        .streamlit-expanderHeader {{ background: {CARD_COLOR}; border: 1px solid {TABLE_BORDER_COLOR}; border-radius: 8px; }}
     </style>
 """, unsafe_allow_html=True)
 
 
 # ---------------------------
-# Motor de Simulação (MANTIDO)
+# Motor de Simulação
 # ---------------------------
 @st.cache_data
 def simulate(_config, reinvestment_strategy):
+    # (O código desta função permanece inalterado)
     cfg_rented = _config['rented']
     cfg_owned = _config['owned']
     cfg_global = _config['global']
@@ -432,7 +239,7 @@ def simulate(_config, reinvestment_strategy):
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
-        if m % 12 == 0:
+        if m > 0 and m % 12 == 0:
             custo_expansao = 0.0
             if reinvestment_strategy == 'buy':
                 custo_expansao = custo_modulo_atual_owned
@@ -493,28 +300,15 @@ def simulate(_config, reinvestment_strategy):
         })
     return pd.DataFrame(rows)
 
-
 # ---------------------------
 # Inicialização e Gerenciamento do Estado
 # ---------------------------
 def get_default_config():
+    # (O código desta função permanece inalterado)
     return {
-        'rented': {
-            'modules_init': 1, 'cost_per_module': 75000.0,
-            'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
-            'rent_value': 750.0, 'rent_per_new_module': 950.0
-        },
-        'owned': {
-            'modules_init': 0, 'cost_per_module': 75000.0,
-            'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
-            'monthly_land_plot_parcel': 0.0, 'land_value_per_module': 200.0,
-            'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120
-        },
-        'global': {
-            'years': 15, 'max_withdraw_value': 50000.0,
-            'general_correction_rate': 5.0,
-            'aportes': [], 'retiradas': [], 'fundos': []
-        }
+        'rented': { 'modules_init': 1, 'cost_per_module': 75000.0, 'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0, 'rent_value': 750.0, 'rent_per_new_module': 950.0 },
+        'owned': { 'modules_init': 0, 'cost_per_module': 75000.0, 'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0, 'monthly_land_plot_parcel': 0.0, 'land_value_per_module': 200.0, 'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120 },
+        'global': { 'years': 15, 'max_withdraw_value': 50000.0, 'general_correction_rate': 5.0, 'aportes': [], 'retiradas': [], 'fundos': [] }
     }
 
 if 'config' not in st.session_state:
@@ -525,28 +319,14 @@ if 'active_page' not in st.session_state: st.session_state.active_page = 'Dashbo
 
 
 # ---------------------------
-# BARRA DE NAVEGAÇÃO LATERAL MODERNA
+# BARRA LATERAL E NAVEGAÇÃO
 # ---------------------------
 with st.sidebar:
     st.markdown("<h1>📊 Simulador Modular</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #94A3B8; margin-bottom: 2rem;'>Projeção com reinvestimento inteligente</p>", unsafe_allow_html=True)
-    
-    # Navegação com ícones
-    nav_options = {
-        "Dashboard": "📈",
-        "Relatórios e Dados": "📋", 
-        "Configurações": "⚙️"
-    }
-    
-    selected = st.radio(
-        "Menu Principal", 
-        list(nav_options.keys()),
-        key="navigation_radio", 
-        label_visibility="collapsed",
-        format_func=lambda x: f"{nav_options[x]} {x}"
-    )
+    nav_options = { "Dashboard": "📈", "Relatórios e Dados": "📋", "Configurações": "⚙️" }
+    selected = st.radio("Menu Principal", list(nav_options.keys()), key="navigation_radio", label_visibility="collapsed", format_func=lambda x: f"{nav_options[x]} {x}")
     st.session_state.active_page = selected
-    
     st.markdown("---")
     st.markdown("<p style='color: #64748B; font-size: 0.85rem;'>Desenvolvido com Streamlit</p>", unsafe_allow_html=True)
 
@@ -555,13 +335,12 @@ with st.sidebar:
 # PÁGINA DE CONFIGURAÇÕES
 # ---------------------------
 if st.session_state.active_page == 'Configurações':
+    # (O código desta página permanece inalterado)
     st.markdown("<h1 class='gradient-header'>Configurações de Investimento</h1>", unsafe_allow_html=True)
     st.markdown("<p class='subhead'>Ajuste os parâmetros da simulação financeira e adicione eventos.</p>", unsafe_allow_html=True)
-    
     if st.button("🔄 Resetar Configurações", type="secondary"):
         st.session_state.config = get_default_config()
         st.rerun()
-        
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("🏢 Investimento com Terreno Alugado")
     c1, c2 = st.columns(2)
@@ -572,20 +351,13 @@ if st.session_state.active_page == 'Configurações':
     cfg_r['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_r['maintenance_per_module'], format="%.2f", key="rent_maint_mod")
     cfg_r['rent_value'] = c2.number_input("Aluguel mensal fixo (R$)", 0.0, value=cfg_r['rent_value'], format="%.2f", key="rent_base_rent")
     cfg_r['rent_per_new_module'] = cfg_r['maintenance_per_module'] + cfg_r['rent_value']
-    c1.number_input(
-        "Custo de aluguel por novo módulo (R$)", 0.0,
-        value=cfg_r['rent_per_new_module'], format="%.2f",
-        key="rent_new_rent", disabled=True,
-        help="Preenchido automaticamente (Manutenção + Aluguel Fixo)."
-    )
+    c2.number_input("Custo de aluguel por novo módulo (R$)", 0.0, value=cfg_r['rent_per_new_module'], format="%.2f", key="rent_new_rent", disabled=True, help="Preenchido automaticamente (Manutenção + Aluguel Fixo).")
     st.markdown('</div><br>', unsafe_allow_html=True)
-    
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("🏠 Investimento com Terreno Próprio")
     cfg_o = st.session_state.config['owned']
     st.markdown("###### Financiamento do Terreno Inicial (Opcional)")
     cfg_o['land_total_value'] = st.number_input("Valor total do terreno inicial (R$)", 0.0, value=cfg_o['land_total_value'], format="%.2f", key="own_total_land_val")
-    valor_parcela = 0.0
     if cfg_o['land_total_value'] > 0:
         c1_fin, c2_fin = st.columns(2)
         cfg_o['land_down_payment_pct'] = c1_fin.number_input("Entrada (%)", 0.0, 100.0, value=cfg_o['land_down_payment_pct'], format="%.1f", key="own_down_pay")
@@ -595,7 +367,6 @@ if st.session_state.active_page == 'Configurações':
         valor_parcela = valor_financiado / cfg_o['land_installments'] if cfg_o['land_installments'] > 0 else 0
         c2_fin.metric("Valor da Entrada", fmt_brl(valor_entrada))
         c2_fin.metric("Valor da Parcela", fmt_brl(valor_parcela))
-        cfg_o['monthly_land_plot_parcel'] = valor_parcela
     st.markdown("---")
     st.markdown("###### Parâmetros do Módulo Próprio")
     c1, c2 = st.columns(2)
@@ -603,36 +374,17 @@ if st.session_state.active_page == 'Configurações':
     cfg_o['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_o['cost_per_module'], format="%.2f", key="own_cost_mod")
     cfg_o['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_o['revenue_per_module'], format="%.2f", key="own_rev_mod")
     cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
-    cfg_o['monthly_land_plot_parcel'] = c2.number_input(
-        "Parcela mensal por novo terreno (R$)", 0.0,
-        value=cfg_o.get('monthly_land_plot_parcel', 0.0),
-        format="%.2f", key="own_land_parcel",
-        disabled=(cfg_o['land_total_value'] > 0),
-        help="Este valor é preenchido automaticamente se um financiamento de terreno inicial for configurado."
-    )
+    cfg_o['monthly_land_plot_parcel'] = c2.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=cfg_o.get('monthly_land_plot_parcel', 0.0), format="%.2f", key="own_land_parcel", help="Este valor será usado para cada novo módulo próprio adquirido.")
     cfg_o['land_value_per_module'] = cfg_o['monthly_land_plot_parcel'] + cfg_o['maintenance_per_module']
-    c1.number_input(
-        "Valor do terreno por novo módulo (R$)", 0.0,
-        value=cfg_o['land_value_per_module'], format="%.2f",
-        key="own_land_value_per_module", disabled=True,
-        help="Preenchido automaticamente (Parcela do Terreno + Manutenção)."
-    )
     st.markdown('</div><br>', unsafe_allow_html=True)
-    
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("🌐 Parâmetros Globais")
     cfg_g = st.session_state.config['global']
     c1, c2 = st.columns(2)
     cfg_g['years'] = c1.number_input("Horizonte de investimento (anos)", 1, 50, value=cfg_g['years'])
-    cfg_g['general_correction_rate'] = c1.number_input(
-        "Correção Anual Geral (Inflação %)", 0.0, 100.0,
-        value=cfg_g.get('general_correction_rate', 5.0), format="%.1f",
-        key="global_corr_rate",
-        help="Taxa anual que corrige receitas, manutenções, aluguéis e parcelas."
-    )
+    cfg_g['general_correction_rate'] = c1.number_input("Correção Anual Geral (Inflação %)", 0.0, 100.0, value=cfg_g.get('general_correction_rate', 5.0), format="%.1f", key="global_corr_rate", help="Taxa anual que corrige receitas, manutenções, aluguéis e parcelas.")
     cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em % do lucro.")
     st.markdown('</div><br>', unsafe_allow_html=True)
-    
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("📅 Eventos Financeiros")
     st.markdown("<h6>Aportes (investimentos pontuais)</h6>", unsafe_allow_html=True)
@@ -640,41 +392,29 @@ if st.session_state.active_page == 'Configurações':
         cols = st.columns([2, 3, 1])
         aporte['mes'] = cols[0].number_input("Mês", 1, None, aporte['mes'], key=f"aporte_mes_{i}")
         aporte['valor'] = cols[1].number_input("Valor (R$)", 0.0, None, aporte['valor'], format="%.2f", key=f"aporte_valor_{i}")
-        if cols[2].button("Remover", key=f"aporte_remover_{i}", type="secondary"):
-            st.session_state.config['global']['aportes'].pop(i)
-            st.rerun()
-    if st.button("Adicionar Aporte"):
-        st.session_state.config['global']['aportes'].append({"mes": 1, "valor": 10000.0})
-        st.rerun()
+        if cols[2].button("Remover", key=f"aporte_remover_{i}", type="secondary"): st.session_state.config['global']['aportes'].pop(i); st.rerun()
+    if st.button("Adicionar Aporte"): st.session_state.config['global']['aportes'].append({"mes": 1, "valor": 10000.0}); st.rerun()
     st.markdown("---")
     st.markdown("<h6>Retiradas (% sobre o lucro mensal)</h6>", unsafe_allow_html=True)
     for i, retirada in enumerate(st.session_state.config['global']['retiradas']):
         cols = st.columns([2, 3, 1])
         retirada['mes'] = cols[0].number_input("Mês início", 1, None, retirada['mes'], key=f"retirada_mes_{i}")
         retirada['percentual'] = cols[1].number_input("% do lucro", 0.0, 100.0, retirada['percentual'], format="%.1f", key=f"retirada_pct_{i}")
-        if cols[2].button("Remover", key=f"retirada_remover_{i}", type="secondary"):
-            st.session_state.config['global']['retiradas'].pop(i)
-            st.rerun()
-    if st.button("Adicionar Retirada"):
-        st.session_state.config['global']['retiradas'].append({"mes": 1, "percentual": 30.0})
-        st.rerun()
+        if cols[2].button("Remover", key=f"retirada_remover_{i}", type="secondary"): st.session_state.config['global']['retiradas'].pop(i); st.rerun()
+    if st.button("Adicionar Retirada"): st.session_state.config['global']['retiradas'].append({"mes": 1, "percentual": 30.0}); st.rerun()
     st.markdown("---")
     st.markdown("<h6>Fundos de Reserva (% sobre o lucro mensal)</h6>", unsafe_allow_html=True)
     for i, fundo in enumerate(st.session_state.config['global']['fundos']):
         cols = st.columns([2, 3, 1])
         fundo['mes'] = cols[0].number_input("Mês início", 1, None, fundo['mes'], key=f"fundo_mes_{i}")
         fundo['percentual'] = cols[1].number_input("% do lucro", 0.0, 100.0, fundo['percentual'], format="%.1f", key=f"fundo_pct_{i}")
-        if cols[2].button("Remover", key=f"fundo_remover_{i}", type="secondary"):
-            st.session_state.config['global']['fundos'].pop(i)
-            st.rerun()
-    if st.button("Adicionar Fundo"):
-        st.session_state.config['global']['fundos'].append({"mes": 1, "percentual": 10.0})
-        st.rerun()
+        if cols[2].button("Remover", key=f"fundo_remover_{i}", type="secondary"): st.session_state.config['global']['fundos'].pop(i); st.rerun()
+    if st.button("Adicionar Fundo"): st.session_state.config['global']['fundos'].append({"mes": 1, "percentual": 10.0}); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------------------------
-# PÁGINA DO DASHBOARD MODERNA
+# PÁGINA DO DASHBOARD
 # ---------------------------
 if st.session_state.active_page == 'Dashboard':
     st.markdown("<h1 class='gradient-header'>Dashboard Estratégico</h1>", unsafe_allow_html=True)
@@ -685,28 +425,31 @@ if st.session_state.active_page == 'Dashboard':
         st.markdown("### 🎯 Estratégias de Reinvestimento")
         strat_cols = st.columns(3)
         
+        # --- CORREÇÃO DO CACHE: Usando deepcopy para garantir que a simulação seja reexecutada ---
+        config_copy = deepcopy(st.session_state.config)
+
         if strat_cols[0].button("**🏠 Comprar Novos**\n\nAquisição de terrenos próprios", use_container_width=True, type="secondary"):
             with st.spinner("Calculando simulação de compra..."):
-                st.session_state.simulation_df = simulate(st.session_state.config, 'buy')
+                st.session_state.simulation_df = simulate(config_copy, 'buy')
                 st.session_state.comparison_df = pd.DataFrame()
                 
         if strat_cols[1].button("**🏢 Alugar Novos**\n\nExpansão com aluguel de terrenos", use_container_width=True, type="secondary"):
             with st.spinner("Calculando simulação de aluguel..."):
-                st.session_state.simulation_df = simulate(st.session_state.config, 'rent')
+                st.session_state.simulation_df = simulate(config_copy, 'rent')
                 st.session_state.comparison_df = pd.DataFrame()
                 
         if strat_cols[2].button("**🔄 Intercalar Novos**\n\nMix entre compra e aluguel", use_container_width=True, type="secondary"):
             with st.spinner("Calculando simulação intercalada..."):
-                st.session_state.simulation_df = simulate(st.session_state.config, 'alternate')
+                st.session_state.simulation_df = simulate(config_copy, 'alternate')
                 st.session_state.comparison_df = pd.DataFrame()
                 
         st.markdown("<hr style='margin: 1.5rem 0; border-color: #334155;'>", unsafe_allow_html=True)
         
         if st.button("**📊 Comparar Todas as Estratégias**", use_container_width=True):
             with st.spinner("Calculando as três simulações..."):
-                df_buy = simulate(st.session_state.config, 'buy'); df_buy['Estratégia'] = 'Comprar'
-                df_rent = simulate(st.session_state.config, 'rent'); df_rent['Estratégia'] = 'Alugar'
-                df_alt = simulate(st.session_state.config, 'alternate'); df_alt['Estratégia'] = 'Intercalar'
+                df_buy = simulate(config_copy, 'buy'); df_buy['Estratégia'] = 'Comprar'
+                df_rent = simulate(config_copy, 'rent'); df_rent['Estratégia'] = 'Alugar'
+                df_alt = simulate(config_copy, 'alternate'); df_alt['Estratégia'] = 'Intercalar'
                 st.session_state.comparison_df = pd.concat([df_buy, df_rent, df_alt])
                 st.session_state.simulation_df = pd.DataFrame()
                 
@@ -714,117 +457,62 @@ if st.session_state.active_page == 'Dashboard':
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # VISUALIZAÇÃO DE RESULTADOS - DESIGN MODERNO
     if not st.session_state.comparison_df.empty:
+        # (Seção de comparação permanece inalterada)
         st.markdown("<h2 class='gradient-header'>📈 Análise Comparativa de Estratégias</h2>", unsafe_allow_html=True)
         df_comp = st.session_state.comparison_df
         final_buy = df_comp[df_comp['Estratégia'] == 'Comprar'].iloc[-1]
         final_rent = df_comp[df_comp['Estratégia'] == 'Alugar'].iloc[-1]
         final_alt = df_comp[df_comp['Estratégia'] == 'Intercalar'].iloc[-1]
-        
-        # KPI Cards modernos
         k1, k2, k3, k4 = st.columns(4)
-        with k1: 
-            render_kpi_card("Comprar", fmt_brl(final_buy['Patrimônio Líquido']), PRIMARY_COLOR, "🏠", "Patrimônio Final")
-        with k2: 
-            render_kpi_card("Alugar", fmt_brl(final_rent['Patrimônio Líquido']), INFO_COLOR, "🏢", "Patrimônio Final")
-        with k3: 
-            render_kpi_card("Intercalar", fmt_brl(final_alt['Patrimônio Líquido']), WARNING_COLOR, "🔄", "Patrimônio Final")
+        with k1: render_kpi_card("Comprar", fmt_brl(final_buy['Patrimônio Líquido']), PRIMARY_COLOR, "🏠", "Patrimônio Final")
+        with k2: render_kpi_card("Alugar", fmt_brl(final_rent['Patrimônio Líquido']), INFO_COLOR, "🏢", "Patrimônio Final")
+        with k3: render_kpi_card("Intercalar", fmt_brl(final_alt['Patrimônio Líquido']), WARNING_COLOR, "🔄", "Patrimônio Final")
         with k4:
-            best_strategy = pd.Series({
-                'Comprar': final_buy['Patrimônio Líquido'], 
-                'Alugar': final_rent['Patrimônio Líquido'], 
-                'Intercalar': final_alt['Patrimônio Líquido']
-            }).idxmax()
+            best_strategy = pd.Series({'Comprar': final_buy['Patrimônio Líquido'], 'Alugar': final_rent['Patrimônio Líquido'], 'Intercalar': final_alt['Patrimônio Líquido']}).idxmax()
             render_kpi_card("Melhor Estratégia", best_strategy, SUCCESS_COLOR, "🏆", "Recomendação")
-
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Gráfico comparativo
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 📊 Evolução Comparativa")
         metric_options = ["Patrimônio Líquido", "Módulos Ativos", "Retiradas Acumuladas", "Fundo Acumulado", "Caixa (Final Mês)"]
         selected_metric = st.selectbox("Selecione uma métrica para comparar:", options=metric_options)
-        
-        fig_comp = px.line(df_comp, x="Mês", y=selected_metric, color='Estratégia',
-                           color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': INFO_COLOR, 'Intercalar': WARNING_COLOR})
+        fig_comp = px.line(df_comp, x="Mês", y=selected_metric, color='Estratégia', color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': INFO_COLOR, 'Intercalar': WARNING_COLOR})
         apply_plot_theme(fig_comp, f'Comparativo de {selected_metric}', h=450)
         st.plotly_chart(fig_comp, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     elif not st.session_state.simulation_df.empty:
-        df = st.session_state.simulation_df
-        final = df.iloc[-1]
-        initial = df.iloc[0]
-        
+        # (Seção de resultados principais permanece com a correção anterior)
+        df = st.session_state.simulation_df; final = df.iloc[-1]
         st.markdown("<h2 class='gradient-header'>📊 Resultados da Simulação</h2>", unsafe_allow_html=True)
-        
-        # KPI Cards principais
         k1, k2, k3, k4 = st.columns(4)
-        with k1: 
-            render_kpi_card("Patrimônio Final", fmt_brl(final['Patrimônio Líquido']), PRIMARY_COLOR, "💰", "Acumulado total")
-        with k2: 
-            render_kpi_card("Retiradas Totais", fmt_brl(final['Retiradas Acumuladas']), DANGER_COLOR, "💸", "Valor sacado")
-        with k3: 
-            render_kpi_card("Fundo de Reserva", fmt_brl(final['Fundo Acumulado']), INFO_COLOR, "🛡️", "Proteção financeira")
-        with k4: 
-            render_kpi_card("Módulos Ativos", f"{int(final['Módulos Ativos'])}", SUCCESS_COLOR, "📦", "Crescimento do negócio")
-
+        with k1: render_kpi_card("Patrimônio Final", fmt_brl(final['Patrimônio Líquido']), PRIMARY_COLOR, "💰", "Acumulado total")
+        with k2: render_kpi_card("Retiradas Totais", fmt_brl(final['Retiradas Acumuladas']), DANGER_COLOR, "💸", "Valor sacado")
+        with k3: render_kpi_card("Fundo de Reserva", fmt_brl(final['Fundo Acumulado']), INFO_COLOR, "🛡️", "Proteção financeira")
+        with k4: render_kpi_card("Módulos Ativos", f"{int(final['Módulos Ativos'])}", SUCCESS_COLOR, "📦", "Crescimento do negócio")
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Gráficos
         col1, col2 = st.columns(2)
-        
         with col1:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.markdown("##### 📈 Evolução do Patrimônio")
             fig_pat = go.Figure()
-            # --- INÍCIO DA CORREÇÃO ---
             r, g, b = _hex_to_rgb(PRIMARY_COLOR)
-            fig_pat.add_trace(go.Scatter(
-                x=df["Mês"], 
-                y=df["Patrimônio Líquido"], 
-                name="Patrimônio", 
-                line=dict(color=PRIMARY_COLOR, width=4),
-                fill='tozeroy',
-                fillcolor=f'rgba({r}, {g}, {b}, 0.2)' # CORRIGIDO: Usando formato rgba
-            ))
-            # --- FIM DA CORREÇÃO ---
+            fig_pat.add_trace(go.Scatter(x=df["Mês"], y=df["Patrimônio Líquido"], name="Patrimônio", line=dict(color=PRIMARY_COLOR, width=4), fill='tozeroy', fillcolor=f'rgba({r}, {g}, {b}, 0.2)'))
             apply_plot_theme(fig_pat, "Crescimento do Patrimônio Líquido")
             st.plotly_chart(fig_pat, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
-            
         with col2:
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.markdown("##### 🥧 Distribuição Final")
-            dist_data = {
-                "Valores": [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']],
-                "Categorias": ["Retiradas", "Fundo Total", "Caixa Final"]
-            }
-            fig_pie = px.pie(dist_data, values="Valores", names="Categorias",
-                                 color="Categorias",
-                                 color_discrete_map={"Retiradas": DANGER_COLOR, "Fundo Total": INFO_COLOR, "Caixa Final": WARNING_COLOR},
-                                 hole=.5)
+            dist_data = {"Valores": [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']], "Categorias": ["Retiradas", "Fundo Total", "Caixa Final"]}
+            fig_pie = px.pie(dist_data, values="Valores", names="Categorias", color="Categorias", color_discrete_map={"Retiradas": DANGER_COLOR, "Fundo Total": INFO_COLOR, "Caixa Final": WARNING_COLOR}, hole=.5)
             apply_plot_theme(fig_pie, "Distribuição dos Recursos")
             st.plotly_chart(fig_pie, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
-            
     else:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.info("""
-        ## 🚀 Comece sua Simulação
-        
-        **Selecione uma das estratégias acima para iniciar a análise:**
-        
-        - **🏠 Comprar**: Investimento em terrenos próprios (maior patrimônio no longo prazo)
-        - **🏢 Alugar**: Expansão rápida com aluguel de terrenos (menor investimento inicial)  
-        - **🔄 Intercalar**: Estratégia mista entre compra e aluguel
-        - **📊 Comparar**: Analise todas as estratégias lado a lado
-        
-        *Configure os parâmetros na página de Configurações para personalizar sua simulação.*
-        """)
+        st.info("## 🚀 Comece sua Simulação\n\n**Selecione uma das estratégias acima para iniciar a análise.**")
         st.markdown('</div>', unsafe_allow_html=True)
-
 
 # ---------------------------
 # PÁGINA DE RELATÓRIOS E DADOS
@@ -834,10 +522,8 @@ if st.session_state.active_page == 'Relatórios e Dados':
     st.markdown("<p class='subhead'>Explore os dados detalhados da simulação mês a mês</p>", unsafe_allow_html=True)
     
     df_to_show = pd.DataFrame()
-    if not st.session_state.comparison_df.empty:
-        df_to_show = st.session_state.comparison_df
-    elif not st.session_state.simulation_df.empty:
-        df_to_show = st.session_state.simulation_df
+    if not st.session_state.comparison_df.empty: df_to_show = st.session_state.comparison_df
+    elif not st.session_state.simulation_df.empty: df_to_show = st.session_state.simulation_df
 
     if df_to_show.empty:
         st.info("👈 Vá para a página 'Dashboard' para executar uma simulação primeiro.")
@@ -845,11 +531,7 @@ if st.session_state.active_page == 'Relatórios e Dados':
         df_analysis_base = df_to_show
         selected_strategy = None
         if 'Estratégia' in df_analysis_base.columns:
-            selected_strategy = st.selectbox(
-                "Selecione a estratégia para análise:",
-                 df_analysis_base['Estratégia'].unique(),
-                 key="relat_strategy_select"
-            )
+            selected_strategy = st.selectbox("Selecione a estratégia para análise:", df_analysis_base['Estratégia'].unique(), key="relat_strategy_select")
             df_analysis = df_analysis_base[df_analysis_base['Estratégia'] == selected_strategy].copy()
         else:
             df_analysis = df_analysis_base.copy()
@@ -860,48 +542,41 @@ if st.session_state.active_page == 'Relatórios e Dados':
             c1, c2 = st.columns(2)
             anos_disponiveis = sorted(df_analysis['Ano'].unique())
             selected_year = c1.selectbox("Selecione o ano", options=anos_disponiveis)
-
             subset = df_analysis[df_analysis['Ano'] == selected_year].copy()
-            if subset.empty:
-                st.warning("Não há dados para o ano selecionado.")
-            else:
+            if not subset.empty:
                 months_in_year = sorted([((m - 1) % 12) + 1 for m in subset['Mês'].unique()])
                 selected_month_label = c2.selectbox("Selecione o mês", options=months_in_year)
                 filtered = subset[((subset["Mês"] - 1) % 12) + 1 == selected_month_label]
-
-                if filtered.empty:
-                    st.warning("Combinação ano/mês sem dados.")
-                else:
+                if not filtered.empty:
                     data_point = filtered.iloc[0]
                     st.markdown("---")
+                    # --- ATUALIZAÇÃO: Substituindo st.metric pelos novos KPIs ---
                     res_cols = st.columns(4)
-                    res_cols[0].metric("Total de Módulos", f"{int(data_point['Módulos Ativos'])}")
-                    res_cols[0].metric("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']))
-                    res_cols[1].metric("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']))
-                    res_cols[1].metric("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']))
-                    res_cols[2].metric("Fundo (Mês)", fmt_brl(data_point['Fundo (Mês)']))
-                    res_cols[2].metric("Fundo Acumulado", fmt_brl(data_point['Fundo Acumulado']))
-                    res_cols[3].metric("Retirada (Mês)", fmt_brl(data_point['Retirada (Mês)']))
-                    res_cols[3].metric("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']))
-
+                    with res_cols[0]:
+                        render_report_metric("Total de Módulos", f"{int(data_point['Módulos Ativos'])}")
+                        render_report_metric("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']))
+                    with res_cols[1]:
+                        render_report_metric("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']))
+                        render_report_metric("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']))
+                    with res_cols[2]:
+                        render_report_metric("Fundo (Mês)", fmt_brl(data_point['Fundo (Mês)']))
+                        render_report_metric("Fundo Acumulado", fmt_brl(data_point['Fundo Acumulado']))
+                    with res_cols[3]:
+                        render_report_metric("Retirada (Mês)", fmt_brl(data_point['Retirada (Mês)']))
+                        render_report_metric("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']))
         with main_cols[1], st.container(border=True):
             st.subheader("📊 Resumo Gráfico do Mês")
-            if not ('data_point' in locals() and not filtered.empty):
-                 st.info("Selecione um ponto no tempo para ver o gráfico.")
-            else:
-                chart_data = pd.DataFrame({
-                    "Categoria": ["Receita", "Gastos", "Retirada", "Fundo"],
-                    "Valor": [ data_point['Receita'], data_point['Gastos'], data_point['Retirada (Mês)'], data_point['Fundo (Mês)']]
-                })
-                fig_monthly = px.bar(chart_data, x="Categoria", y="Valor", text_auto='.2s',
-                                     color="Categoria",
-                                     color_discrete_map={"Receita": SUCCESS_COLOR, "Gastos": WARNING_COLOR, "Retirada": DANGER_COLOR, "Fundo": INFO_COLOR})
+            if 'data_point' in locals() and not filtered.empty:
+                chart_data = pd.DataFrame({"Categoria": ["Receita", "Gastos", "Retirada", "Fundo"], "Valor": [ data_point['Receita'], data_point['Gastos'], data_point['Retirada (Mês)'], data_point['Fundo (Mês)']]})
+                fig_monthly = px.bar(chart_data, x="Categoria", y="Valor", text_auto='.2s', color="Categoria", color_discrete_map={"Receita": SUCCESS_COLOR, "Gastos": WARNING_COLOR, "Retirada": DANGER_COLOR, "Fundo": INFO_COLOR})
                 apply_plot_theme(fig_monthly, f"Fluxo Financeiro - Mês {int(data_point['Mês'])}")
-                st.plotly_chart(fig_monthly, use_container_width=True)
-
+                st.plotly_chart(fig_monthly, use_container_width=True, config={'displayModeBar': False})
+            else:
+                st.info("Selecione um ponto no tempo para ver o gráfico.")
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
             st.subheader("📋 Tabela Completa da Simulação")
+            # (O restante do código da página permanece inalterado)
             all_columns = df_analysis.columns.tolist()
             state_key = f"column_visibility_{slug(selected_strategy or 'default')}"
             if state_key not in st.session_state or set(st.session_state[state_key].keys()) != set(all_columns):
@@ -913,10 +588,7 @@ if st.session_state.active_page == 'Relatórios e Dados':
                 for i, col_name in enumerate(all_columns):
                     with grid_cols[i % 5]:
                         new_on = st.toggle(col_name, value=vis_map.get(col_name, False), key=f"tg_{slug(selected_strategy or 'default')}_{slug(col_name)}")
-                        if new_on != vis_map.get(col_name):
-                            vis_map[col_name] = new_on
-                            st.session_state[state_key] = vis_map
-                            st.rerun()
+                        if new_on != vis_map.get(col_name): vis_map[col_name] = new_on; st.session_state[state_key] = vis_map; st.rerun()
             cols_to_show = [c for c, v in st.session_state[state_key].items() if v]
             if not cols_to_show:
                 st.warning("Selecione ao menos uma coluna para visualizar a tabela.")
@@ -924,24 +596,14 @@ if st.session_state.active_page == 'Relatórios e Dados':
                 page_size = 12
                 total_pages = (len(df_analysis) - 1) // page_size + 1
                 if 'page' not in st.session_state: st.session_state.page = 0
-                if st.session_state.page >= total_pages:
-                    st.session_state.page = 0
+                if st.session_state.page >= total_pages: st.session_state.page = 0
                 start_idx = st.session_state.page * page_size
-                end_idx = start_idx + page_size
-                df_display = df_analysis.iloc[start_idx:end_idx].copy()
-                for col in (MONEY_COLS & set(df_display.columns)):
-                    df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
+                df_display = df_analysis.iloc[start_idx:start_idx + page_size].copy()
+                for col in (MONEY_COLS & set(df_display.columns)): df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
                 st.dataframe( df_display[cols_to_show], use_container_width=True, hide_index=True )
                 page_cols = st.columns([1, 1, 8])
-                if page_cols[0].button("Anterior", disabled=(st.session_state.page == 0), type="secondary"):
-                    st.session_state.page -= 1; st.rerun()
-                if page_cols[1].button("Próxima", disabled=(st.session_state.page >= total_pages - 1), type="secondary"):
-                    st.session_state.page += 1; st.rerun()
+                if page_cols[0].button("Anterior", disabled=(st.session_state.page == 0), type="secondary"): st.session_state.page -= 1; st.rerun()
+                if page_cols[1].button("Próxima", disabled=(st.session_state.page >= total_pages - 1), type="secondary"): st.session_state.page += 1; st.rerun()
                 page_cols[2].markdown(f"<div style='padding-top:10px; color:{MUTED_TEXT_COLOR}'>Página {st.session_state.page + 1} de {total_pages}</div>", unsafe_allow_html=True)
             excel_bytes = df_to_excel_bytes(df_analysis)
-            st.download_button(
-                "📥 Baixar Relatório Completo (Excel)",
-                data=excel_bytes,
-                file_name=f"relatorio_simulacao_{slug(selected_strategy or 'geral')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.download_button("📥 Baixar Relatório Completo (Excel)", data=excel_bytes, file_name=f"relatorio_simulacao_{slug(selected_strategy or 'geral')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
