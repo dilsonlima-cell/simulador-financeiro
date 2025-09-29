@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v7 com Layout Moderno Inspirado na Imagem
+# Simulador Modular — v7 com Layout Moderno e Fundo Azul Escuro
 
 import streamlit as st
 import pandas as pd
@@ -9,21 +9,21 @@ import plotly.express as px
 from io import BytesIO
 import re
 
-# --- PALETA DE CORES E CONFIGURAÇÕES (TEMA MODERNO) ---
+# --- PALETA DE CORES E CONFIGURAÇÕES (TEMA AZUL ESCURO) ---
 PRIMARY_COLOR = "#2563EB"
 SECONDARY_COLOR = "#0EA5E9"
 SUCCESS_COLOR = "#10B981"
 DANGER_COLOR  = "#EF4444"
 WARNING_COLOR = "#F59E0B"
 INFO_COLOR    = "#8B5CF6"
-DARK_BACKGROUND  = "#0F172A"
-LIGHT_BACKGROUND = "#F8FAFC"
-TEXT_COLOR       = "#1E293B"
-CARD_COLOR       = "#FFFFFF"
-MUTED_TEXT_COLOR = "#64748B"
+DARK_BACKGROUND  = "#0B1120"  # Azul mais escuro como na imagem
+LIGHT_BACKGROUND = "#0F172A"  # Tom médio para cards
+TEXT_COLOR       = "#F1F5F9"  # Texto claro para contraste
+CARD_COLOR       = "#1E293B"  # Cards com azul escuro
+MUTED_TEXT_COLOR = "#94A3B8"
 ACCENT_COLOR     = "#6366F1"
-TABLE_BORDER_COLOR = "#E2E8F0"
-CHART_GRID_COLOR = "#F1F5F9"
+TABLE_BORDER_COLOR = "#334155"
+CHART_GRID_COLOR = "#1E293B"
 
 # --- DEFINIÇÃO DE COLUNAS PARA FORMATAÇÃO ---
 MONEY_COLS = {
@@ -48,8 +48,8 @@ def _luminance(rgb):
     return 0.2126*r + 0.7152*g + 0.0722*b
 
 def ideal_text_color(bg_hex: str) -> str:
-    """Força o uso da cor de texto corporativa em todos os casos."""
-    return TEXT_COLOR
+    """Retorna cor de texto ideal baseada no fundo."""
+    return TEXT_COLOR  # Texto claro para contraste com fundo escuro
 
 def fmt_brl(v):
     """Formata um valor numérico como uma string de moeda brasileira de forma robusta."""
@@ -132,28 +132,31 @@ def apply_plot_theme(fig, title=None, h=420):
             y=1.02, 
             xanchor="right", 
             x=1,
-            bgcolor='rgba(255,255,255,0.8)',
+            bgcolor='rgba(30, 41, 59, 0.8)',
             bordercolor=TABLE_BORDER_COLOR,
-            borderwidth=1
+            borderwidth=1,
+            font=dict(color=TEXT_COLOR)
         ),
         plot_bgcolor=CARD_COLOR, 
         paper_bgcolor=CARD_COLOR,
         font=dict(color=TEXT_COLOR, size=13, family="Arial, sans-serif"),
         xaxis=dict(
-            gridcolor=CHART_GRID_COLOR,
+            gridcolor=TABLE_BORDER_COLOR,
             linecolor=TABLE_BORDER_COLOR,
-            linewidth=1
+            linewidth=1,
+            tickfont=dict(color=MUTED_TEXT_COLOR)
         ), 
         yaxis=dict(
-            gridcolor=CHART_GRID_COLOR,
+            gridcolor=TABLE_BORDER_COLOR,
             linecolor=TABLE_BORDER_COLOR,
-            linewidth=1
+            linewidth=1,
+            tickfont=dict(color=MUTED_TEXT_COLOR)
         )
     )
     return fig
 
 # ---------------------------
-# CSS - Estilos da Página Moderna
+# CSS - Estilos da Página com Fundo Azul Escuro
 # ---------------------------
 st.set_page_config(page_title="Simulador Modular", layout="wide", initial_sidebar_state="expanded")
 st.markdown(f"""
@@ -163,12 +166,12 @@ st.markdown(f"""
             max-width: 100%;
         }}
         .stApp {{ 
-            background: linear-gradient(135deg, {LIGHT_BACKGROUND} 0%, #FFFFFF 100%);
+            background: {DARK_BACKGROUND};
         }}
         
         /* Sidebar moderna */
         [data-testid="stSidebar"] {{ 
-            background: {DARK_BACKGROUND};
+            background: {LIGHT_BACKGROUND};
             border-right: 1px solid {TABLE_BORDER_COLOR};
         }}
         [data-testid="stSidebar"] * {{ 
@@ -181,7 +184,7 @@ st.markdown(f"""
             margin-bottom: 0.5rem;
         }}
         
-        /* Cores de texto */
+        /* Cores de texto para fundo escuro */
         h1, h2, h3, h4, h5, h6 {{ 
             color: {TEXT_COLOR}; 
             font-weight: 600;
@@ -189,6 +192,9 @@ st.markdown(f"""
         .subhead {{ 
             color: {MUTED_TEXT_COLOR}; 
             font-size: 1.1rem;
+        }}
+        p, label, span {{ 
+            color: {TEXT_COLOR} !important; 
         }}
         
         /* Botões modernos */
@@ -224,29 +230,29 @@ st.markdown(f"""
             border-radius: 16px; 
             padding: 1.5rem;
             border: 1px solid {TABLE_BORDER_COLOR};
-            box-shadow: 0 4px 20px rgba(0,0,0,.08);
+            box-shadow: 0 4px 20px rgba(0,0,0,.15);
             backdrop-filter: blur(10px);
         }}
         
-        /* KPI Cards - Design moderno inspirado na imagem */
+        /* KPI Cards - Design moderno */
         .kpi-card-modern {{
             border-radius: 20px; 
             padding: 2rem 1.5rem;
-            box-shadow: 0 8px 25px rgba(0,0,0,.12); 
+            box-shadow: 0 8px 25px rgba(0,0,0,.2); 
             height: 100%;
             text-align: center;
             transition: transform 0.3s ease;
-            background: linear-gradient(135deg, {PRIMARY_COLOR}15 0%, {SECONDARY_COLOR}15 100%);
+            background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%);
             border: 1px solid {TABLE_BORDER_COLOR};
         }}
         .kpi-card-modern:hover {{
             transform: translateY(-5px);
-            box-shadow: 0 12px 30px rgba(0,0,0,.15);
+            box-shadow: 0 12px 30px rgba(0,0,0,.25);
         }}
         .kpi-card-title-modern {{ 
             font-size: 1rem; 
             font-weight: 600; 
-            opacity: .85;
+            opacity: .95;
             margin-top: 0.5rem;
         }}
         .kpi-card-value-modern {{ 
@@ -256,7 +262,7 @@ st.markdown(f"""
         }}
         .kpi-card-subtitle {{
             font-size: 0.85rem;
-            opacity: .7;
+            opacity: .8;
             margin-top: 0.5rem;
         }}
         
@@ -290,9 +296,10 @@ st.markdown(f"""
             border: 1px solid {TABLE_BORDER_COLOR};
             border-radius: 12px;
             overflow: hidden;
+            background: {CARD_COLOR};
         }}
         [data-testid="stDataFrame"] th {{
-            background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%) !important; 
+            background: linear-gradient(135deg, {LIGHT_BACKGROUND} 0%, {CARD_COLOR} 100%) !important; 
             color: {TEXT_COLOR} !important; 
             font-weight: 700 !important;
             border-bottom: 1px solid {TABLE_BORDER_COLOR} !important;
@@ -301,6 +308,8 @@ st.markdown(f"""
         [data-testid="stDataFrame"] td {{
             padding: 10px 16px !important;
             border-bottom: 1px solid {TABLE_BORDER_COLOR} !important;
+            color: {TEXT_COLOR} !important;
+            background: {CARD_COLOR} !important;
         }}
         
         /* Tabs e containers */
@@ -311,10 +320,21 @@ st.markdown(f"""
             border-radius: 12px 12px 0 0;
             padding: 12px 24px;
             background-color: {LIGHT_BACKGROUND};
+            color: {TEXT_COLOR};
         }}
         .stTabs [aria-selected="true"] {{
             background-color: {PRIMARY_COLOR} !important;
             color: white !important;
+        }}
+        
+        /* Input fields e selects */
+        .stTextInput input, .stNumberInput input, .stSelectbox select {{
+            background: {CARD_COLOR} !important;
+            color: {TEXT_COLOR} !important;
+            border: 1px solid {TABLE_BORDER_COLOR} !important;
+        }}
+        .stTextInput label, .stNumberInput label, .stSelectbox label {{
+            color: {TEXT_COLOR} !important;
         }}
         
         /* Headers com gradiente */
@@ -324,6 +344,21 @@ st.markdown(f"""
             -webkit-text-fill-color: transparent;
             background-clip: text;
             font-weight: 700;
+        }}
+        
+        /* Metric cards */
+        [data-testid="stMetricValue"] {{
+            color: {TEXT_COLOR} !important;
+        }}
+        [data-testid="stMetricLabel"] {{
+            color: {MUTED_TEXT_COLOR} !important;
+        }}
+        
+        /* Expander styling */
+        .streamlit-expanderHeader {{
+            background: {CARD_COLOR};
+            border: 1px solid {TABLE_BORDER_COLOR};
+            border-radius: 8px;
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -517,7 +552,7 @@ with st.sidebar:
 
 
 # ---------------------------
-# PÁGINA DE CONFIGURAÇÕES (MANTIDA)
+# PÁGINA DE CONFIGURAÇÕES
 # ---------------------------
 if st.session_state.active_page == 'Configurações':
     st.markdown("<h1 class='gradient-header'>Configurações de Investimento</h1>", unsafe_allow_html=True)
@@ -665,7 +700,7 @@ if st.session_state.active_page == 'Dashboard':
                 st.session_state.simulation_df = simulate(st.session_state.config, 'alternate')
                 st.session_state.comparison_df = pd.DataFrame()
                 
-        st.markdown("<hr style='margin: 1.5rem 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin: 1.5rem 0; border-color: #334155;'>", unsafe_allow_html=True)
         
         if st.button("**📊 Comparar Todas as Estratégias**", use_container_width=True):
             with st.spinner("Calculando as três simulações..."):
@@ -789,7 +824,7 @@ if st.session_state.active_page == 'Dashboard':
 
 
 # ---------------------------
-# PÁGINA DE RELATÓRIOS E DADOS (MANTIDA)
+# PÁGINA DE RELATÓRIOS E DADOS
 # ---------------------------
 if st.session_state.active_page == 'Relatórios e Dados':
     st.markdown("<h1 class='gradient-header'>Relatórios e Dados</h1>", unsafe_allow_html=True)
