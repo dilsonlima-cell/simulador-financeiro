@@ -10,8 +10,8 @@ from io import BytesIO
 import re
 from copy import deepcopy
 
-# --- PALETA DE CORES E CONFIGURAÇÕES (TEMA AZUL ESCURO) ---
-PRIMARY_COLOR = "#2563EB"
+# --- PALETA DE CORES E CONFIGURAÇÕES (TEMA AZUL ESCURO, AJUSTADO PARA TOM LARANJA COMO PRIMÁRIO) ---
+PRIMARY_COLOR = "#F5A623"
 SECONDARY_COLOR = "#0EA5E9"
 SUCCESS_COLOR = "#10B981"
 DANGER_COLOR  = "#EF4444"
@@ -139,9 +139,9 @@ st.markdown(f"""
         h1, h2, h3, h4, h5, h6 {{ color: {TEXT_COLOR}; font-weight: 600; }}
         .subhead {{ color: {MUTED_TEXT_COLOR}; font-size: 1.1rem; }}
         .stButton > button {{ border-radius: 12px; border: 2px solid {PRIMARY_COLOR}; background-color: {PRIMARY_COLOR}; color: white; padding: 12px 24px; font-weight: 600; transition: all 0.3s ease; white-space: pre-line; text-align: center; }}
-        .stButton > button:hover {{ background-color: #1E40AF; border-color: #1E40AF; transform: translateY(-2px); }}
+        .stButton > button:hover {{ background-color: #D98200; border-color: #D98200; transform: translateY(-2px); }}
         .stButton > button[kind="secondary"] {{ background-color: transparent; color: {PRIMARY_COLOR}; }}
-        .stButton > button[kind="secondary"]:hover {{ background-color: rgba(37, 99, 235, .08); }}
+        .stButton > button[kind="secondary"]:hover {{ background-color: rgba(245, 166, 35, .08); }}
         .card {{ background: {CARD_COLOR}; border-radius: 16px; padding: 1.5rem; border: 1px solid {TABLE_BORDER_COLOR}; }}
         .kpi-card-modern {{ border-radius: 20px; padding: 2rem 1.5rem; height: 100%; text-align: center; transition: transform 0.3s ease; background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%); }}
         .kpi-card-modern:hover {{ transform: translateY(-5px); }}
@@ -179,6 +179,9 @@ def simulate(_config, reinvestment_strategy):
         modules_rented * cfg_rented['cost_per_module'] +
         modules_owned * cfg_owned['cost_per_module']
     )
+    
+    historical_value_rented = modules_rented * cfg_rented['cost_per_module']
+    historical_value_owned = modules_owned * cfg_owned['cost_per_module']
     
     fundo_ac = 0.0
     retiradas_ac = 0.0
@@ -274,6 +277,7 @@ def simulate(_config, reinvestment_strategy):
                         custo_da_compra = novos_modulos_comprados * custo_expansao
                         caixa -= custo_da_compra
                         investimento_total += custo_da_compra
+                        historical_value_owned += custo_da_compra
                         modules_owned += novos_modulos_comprados
                         parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
             elif reinvestment_strategy == 'rent':
@@ -284,6 +288,7 @@ def simulate(_config, reinvestment_strategy):
                         custo_da_compra = novos_modulos_comprados * custo_expansao
                         caixa -= custo_da_compra
                         investimento_total += custo_da_compra
+                        historical_value_rented += custo_da_compra
                         modules_rented += novos_modulos_comprados
                         aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
             elif reinvestment_strategy == 'alternate':
@@ -295,6 +300,7 @@ def simulate(_config, reinvestment_strategy):
                             custo_da_compra = novos_modulos_comprados * custo_expansao
                             caixa -= custo_da_compra
                             investimento_total += custo_da_compra
+                            historical_value_owned += custo_da_compra
                             modules_owned += novos_modulos_comprados
                             parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
                             compra_intercalada_counter += novos_modulos_comprados
@@ -306,6 +312,7 @@ def simulate(_config, reinvestment_strategy):
                             custo_da_compra = novos_modulos_comprados * custo_expansao
                             caixa -= custo_da_compra
                             investimento_total += custo_da_compra
+                            historical_value_rented += custo_da_compra
                             modules_rented += novos_modulos_comprados
                             aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
                             compra_intercalada_counter += novos_modulos_comprados
@@ -325,7 +332,7 @@ def simulate(_config, reinvestment_strategy):
             parcela_p_novo_terreno *= correction_factor
 
         # Patrimônio Líquido = Ativos - Passivos
-        ativos = (modules_owned * custo_modulo_atual_owned) + caixa + fundo_ac
+        ativos = historical_value_owned + historical_value_rented + caixa + fundo_ac
         passivos = saldo_financiamento_terreno
         patrimonio_liquido = ativos - passivos
 
