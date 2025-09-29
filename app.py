@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v9.5 com Correções de Reinvestimento e Interface
+# Simulador Modular — v9.4 com Correções Finais de Interface e Lógica
 
 import streamlit as st
 import pandas as pd
@@ -19,9 +19,9 @@ WARNING_COLOR = "#F59E0B"
 INFO_COLOR    = "#8B5CF6"
 DARK_BACKGROUND  = "#0B1120"
 LIGHT_BACKGROUND = "#0F172A"
-TEXT_COLOR       = "#FFFFFF"  # Alterado para branco
+TEXT_COLOR       = "#F1F5F9"
 CARD_COLOR       = "#1E293B"
-MUTED_TEXT_COLOR = "#FFFFFF"  # Alterado para branco
+MUTED_TEXT_COLOR = "#F1F5F9"
 ACCENT_COLOR     = "#6366F1"
 TABLE_BORDER_COLOR = "#334155"
 CHART_GRID_COLOR = "#1E293B"
@@ -154,10 +154,6 @@ st.markdown(f"""
         [data-testid="stDataFrame"] th {{ background-color: {LIGHT_BACKGROUND} !important; color: {TEXT_COLOR} !important; }}
         .stTextInput input, .stNumberInput input, .stSelectbox select {{ background: {CARD_COLOR} !important; color: {TEXT_COLOR} !important; border: 1px solid {TABLE_BORDER_COLOR} !important; }}
         .gradient-header {{ background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700; }}
-        /* Estilos para textos em cinza - alterados para branco */
-        .stMarkdown p, .stMarkdown div, .stMarkdown span {{ color: {TEXT_COLOR} !important; }}
-        .st-expander .stMarkdown {{ color: {TEXT_COLOR} !important; }}
-        .stAlert {{ color: {TEXT_COLOR} !important; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -200,11 +196,9 @@ def simulate(_config, reinvestment_strategy):
     manut_p_mod_owned = cfg_owned['maintenance_per_module']
     aluguel_p_novo_mod = cfg_rented['rent_per_new_module']
     parcela_p_novo_terreno = cfg_owned['monthly_land_plot_parcel']
+    aluguel_mensal_corrente = cfg_rented['rent_value'] + (cfg_rented['modules_init'] * cfg_rented['rent_per_new_module'])
+    parcelas_terrenos_novos_mensal_corrente = 0.0
     
-    # CUSTOS MENSAL CORRIGIDO: Soma da manutenção com aluguel/parcela
-    aluguel_mensal_corrente = cfg_rented['rent_value'] + (modules_rented * (cfg_rented['maintenance_per_module'] + cfg_rented['rent_per_new_module']))
-    parcelas_terrenos_novos_mensal_corrente = (modules_owned * (cfg_owned['maintenance_per_module'] + cfg_owned['monthly_land_plot_parcel']))
-
     # Financiamento do terreno inicial
     parcela_terreno_inicial_atual = 0.0
     saldo_financiamento_terreno = 0.0
@@ -220,16 +214,15 @@ def simulate(_config, reinvestment_strategy):
         receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
         manut = (modules_rented * manut_p_mod_rented) + (modules_owned * manut_p_mod_owned)
         novos_modulos_comprados = 0
-        novos_modulos_alugados = 0
 
         # Aportes
         aporte_mes = sum(a.get('valor', 0.0) for a in cfg_global['aportes'] if a.get('mes') == m)
         caixa += aporte_mes
         investimento_total += aporte_mes
 
-        # Gastos operacionais - CORRIGIDO: Já inclui manutenção + aluguel/parcelas
+        # Gastos operacionais
         gastos_operacionais = aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente
-        lucro_operacional = receita - gastos_operacionais
+        lucro_operacional = receita - manut - gastos_operacionais
         
         # Pagamento da parcela do terreno inicial (reduz caixa e passivo)
         parcela_terreno_inicial_mes = 0.0
@@ -271,7 +264,7 @@ def simulate(_config, reinvestment_strategy):
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
 
-        # REINVESTIMENTO CORRIGIDO (final do ano)
+        # Reinvestimento (final do ano)
         if m % 12 == 0:
             if reinvestment_strategy == 'buy':
                 custo_expansao = custo_modulo_atual_owned
@@ -282,21 +275,17 @@ def simulate(_config, reinvestment_strategy):
                         caixa -= custo_da_compra
                         investimento_total += custo_da_compra
                         modules_owned += novos_modulos_comprados
-                        # Atualiza custos mensais para módulos próprios
-                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * (manut_p_mod_owned + parcela_p_novo_terreno)
-
-            elif reinvestment_strategy == 'rent':  # CORREÇÃO: Estratégia de aluguel implementada
+                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
+            elif reinvestment_strategy == 'rent':
                 custo_expansao = custo_modulo_atual_rented
                 if caixa >= custo_expansao and custo_expansao > 0:
-                    novos_modulos_alugados = int(caixa // custo_expansao)
-                    if novos_modulos_alugados > 0:
-                        custo_da_compra = novos_modulos_alugados * custo_expansao
+                    novos_modulos_comprados = int(caixa // custo_expansao)
+                    if novos_modulos_comprados > 0:
+                        custo_da_compra = novos_modulos_comprados * custo_expansao
                         caixa -= custo_da_compra
                         investimento_total += custo_da_compra
-                        modules_rented += novos_modulos_alugados
-                        # Atualiza custos mensais para módulos alugados
-                        aluguel_mensal_corrente += novos_modulos_alugados * (manut_p_mod_rented + aluguel_p_novo_mod)
-
+                        modules_rented += novos_modulos_comprados
+                        aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
             elif reinvestment_strategy == 'alternate':
                 if compra_intercalada_counter % 2 == 0:
                     custo_expansao = custo_modulo_atual_owned
@@ -307,19 +296,19 @@ def simulate(_config, reinvestment_strategy):
                             caixa -= custo_da_compra
                             investimento_total += custo_da_compra
                             modules_owned += novos_modulos_comprados
-                            parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * (manut_p_mod_owned + parcela_p_novo_terreno)
-                            compra_intercalada_counter += 1
+                            parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
+                            compra_intercalada_counter += novos_modulos_comprados
                 else:
                     custo_expansao = custo_modulo_atual_rented
                     if caixa >= custo_expansao and custo_expansao > 0:
-                        novos_modulos_alugados = int(caixa // custo_expansao)
-                        if novos_modulos_alugados > 0:
-                            custo_da_compra = novos_modulos_alugados * custo_expansao
+                        novos_modulos_comprados = int(caixa // custo_expansao)
+                        if novos_modulos_comprados > 0:
+                            custo_da_compra = novos_modulos_comprados * custo_expansao
                             caixa -= custo_da_compra
                             investimento_total += custo_da_compra
-                            modules_rented += novos_modulos_alugados
-                            aluguel_mensal_corrente += novos_modulos_alugados * (manut_p_mod_rented + aluguel_p_novo_mod)
-                            compra_intercalada_counter += 1
+                            modules_rented += novos_modulos_comprados
+                            aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
+                            compra_intercalada_counter += novos_modulos_comprados
 
             # Correção monetária anual
             correction_factor = 1 + correction_rate_pct
@@ -362,7 +351,6 @@ def simulate(_config, reinvestment_strategy):
             "Fundo Acumulado": fundo_ac,
             "Retiradas Acumuladas": retiradas_ac,
             "Módulos Comprados no Ano": novos_modulos_comprados,
-            "Módulos Alugados no Ano": novos_modulos_alugados,
             "Patrimônio Líquido": patrimonio_liquido
         })
         
@@ -445,12 +433,6 @@ if st.session_state.active_page == 'Configurações':
     cfg_r['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_r['maintenance_per_module'], format="%.2f", key="rent_maint_mod")
     cfg_r['rent_value'] = c1.number_input("Aluguel mensal fixo (R$)", 0.0, value=cfg_r['rent_value'], format="%.2f", key="rent_base_rent")
     cfg_r['rent_per_new_module'] = c1.number_input("Custo de aluguel por novo módulo (R$)", 0.0, value=cfg_r['rent_per_new_module'], format="%.2f", key="rent_new_rent")
-    
-    # Mostrar custo mensal total para terreno alugado
-    custo_mensal_aluguel = cfg_r['rent_value'] + (cfg_r['modules_init'] * (cfg_r['maintenance_per_module'] + cfg_r['rent_per_new_module']))
-    c2.metric("💡 Custo Mensal Total (Aluguel)", fmt_brl(custo_mensal_aluguel), 
-              help="Soma do aluguel fixo + (módulos × (manutenção + aluguel por módulo))")
-    
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('<div class="card" style="margin-bottom: 1rem;">', unsafe_allow_html=True)
@@ -458,6 +440,7 @@ if st.session_state.active_page == 'Configurações':
     cfg_o = st.session_state.config['owned']
     st.markdown("###### Financiamento do Terreno Inicial (Opcional)")
     cfg_o['land_total_value'] = st.number_input("Valor total do terreno inicial (R$)", 0.0, value=cfg_o['land_total_value'], format="%.2f", key="own_total_land_val")
+    valor_parcela = 0.0
     if cfg_o['land_total_value'] > 0:
         c1_fin, c2_fin = st.columns(2)
         cfg_o['land_down_payment_pct'] = c1_fin.number_input("Entrada (%)", 0.0, 100.0, value=cfg_o['land_down_payment_pct'], format="%.1f", key="own_down_pay")
@@ -474,17 +457,7 @@ if st.session_state.active_page == 'Configurações':
     cfg_o['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_o['cost_per_module'], format="%.2f", key="own_cost_mod")
     cfg_o['revenue_per_module'] = c2.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_o['revenue_per_module'], format="%.2f", key="own_rev_mod")
     cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
-    cfg_o['monthly_land_plot_parcel'] = c1.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=cfg_o.get('monthly_land_plot_parcel', 0.0), format="%.2f", key="own_land_parcel", help="Este valor será usado para cada novo módulo próprio adquirido.")
-    
-    # Mostrar custo mensal total para terreno próprio
-    custo_mensal_proprio = (cfg_o['modules_init'] * (cfg_o['maintenance_per_module'] + cfg_o['monthly_land_plot_parcel']))
-    if cfg_o['land_total_value'] > 0:
-        valor_parcela_terreno = valor_financiado / cfg_o['land_installments'] if cfg_o['land_installments'] > 0 else 0
-        custo_mensal_proprio += valor_parcela_terreno
-    
-    c2.metric("💡 Custo Mensal Total (Próprio)", fmt_brl(custo_mensal_proprio),
-              help="Soma da parcela do terreno + (módulos × (manutenção + parcela por terreno))")
-    
+    cfg_o['monthly_land_plot_parcel'] = c1.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=valor_parcela, format="%.2f", key="own_land_parcel", help="Este valor será usado para cada novo módulo próprio adquirido.")
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('<div class="card" style="margin-bottom: 1rem;">', unsafe_allow_html=True)
@@ -539,7 +512,7 @@ if st.session_state.active_page == 'Configurações':
 # ---------------------------
 if st.session_state.active_page == 'Dashboard':
     st.markdown("<h1 class='gradient-header'>Dashboard Estratégico</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='subhead'>Simule uma estratégia de reinvestimento ou compare todas as abordagens</p>", unsafe_allow_html=True)
+    st.markdown("<p class='subhead'>Simule uma estratégia de reinvestimento ou compare todas as abordagens. Após alterar configurações, selecione uma estratégia para atualizar.</p>", unsafe_allow_html=True)
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("### 🎯 Estratégias de Reinvestimento")
@@ -764,12 +737,15 @@ if st.session_state.active_page == 'Relatórios e Dados':
             if state_key not in st.session_state:
                 default_cols = ['Mês', 'Ano', 'Módulos Ativos', 'Receita', 'Gastos', 'Caixa (Final Mês)', 'Patrimônio Líquido']
                 st.session_state[state_key] = {c: (c in default_cols) for c in all_columns}
-            cols_to_show = st.multiselect(
-                "Selecione as colunas para exibir:",
-                options=all_columns,
-                default=[c for c, v in st.session_state[state_key].items() if v],
-                key=f"multiselect_{state_key}"
-            )
+            st.markdown("Selecione as colunas para exibir:")
+            cols_to_show = []
+            toggle_cols = st.columns(3)
+            for idx, c in enumerate(all_columns):
+                with toggle_cols[idx % 3]:
+                    toggle_key = f"toggle_{slug(c)}_{state_key}"
+                    st.session_state[state_key][c] = st.toggle(c, value=st.session_state[state_key][c], key=toggle_key)
+                    if st.session_state[state_key][c]:
+                        cols_to_show.append(c)
             if not cols_to_show:
                 st.warning("Selecione ao menos uma coluna.")
             else:
