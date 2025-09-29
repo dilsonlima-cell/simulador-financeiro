@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v9.1 com Correções de Lógica Financeira
+# Simulador Modular — v9.2 com Correções de Lógica Financeira
 
 import streamlit as st
 import pandas as pd
@@ -165,7 +165,10 @@ def simulate(_config, reinvestment_strategy):
     months = cfg_global['years'] * 12; rows = []
     modules_rented = cfg_rented['modules_init']; modules_owned = cfg_owned['modules_init']
     caixa = 0.0;
+    
+    # CORREÇÃO 1: Investimento inicial correto
     investimento_total = (modules_rented * cfg_rented['cost_per_module']) + (modules_owned * cfg_owned['cost_per_module'])
+    
     fundo_ac = 0.0; retiradas_ac = 0.0; valor_terrenos_adicionais = 0.0; compra_intercalada_counter = 0
     
     # Parâmetros que sofrem correção anual
@@ -176,13 +179,16 @@ def simulate(_config, reinvestment_strategy):
     aluguel_p_novo_mod = cfg_rented['rent_per_new_module']; parcela_p_novo_terreno = cfg_owned['monthly_land_plot_parcel']
     aluguel_mensal_corrente = cfg_rented['rent_value']; parcelas_terrenos_novos_mensal_corrente = 0.0
     
+    # CORREÇÃO 2: Tratamento correto do financiamento do terreno
     parcela_terreno_inicial_atual = 0.0
+    saldo_financiamento_terreno = 0.0
     if cfg_owned['land_total_value'] > 0:
         valor_entrada_terreno = cfg_owned['land_total_value'] * (cfg_owned['land_down_payment_pct'] / 100.0)
         valor_financiado = cfg_owned['land_total_value'] - valor_entrada_terreno
+        saldo_financiamento_terreno = valor_financiado
         if cfg_owned['land_installments'] > 0:
             parcela_terreno_inicial_atual = valor_financiado / cfg_owned['land_installments']
-        investimento_total += valor_entrada_terreno # A entrada é um investimento inicial
+        investimento_total += valor_entrada_terreno  # Apenas a entrada é investimento inicial
 
     for m in range(1, months + 1):
         receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
@@ -195,14 +201,17 @@ def simulate(_config, reinvestment_strategy):
 
         lucro_operacional_mes = receita - manut - aluguel_mensal_corrente - parcelas_terrenos_novos_mensal_corrente
         
+        # CORREÇÃO 3: Tratamento correto das parcelas do terreno
         parcela_terreno_inicial_mes = 0.0
-        if cfg_owned['land_total_value'] > 0 and m <= cfg_owned['land_installments']:
-            parcela_terreno_inicial_mes = parcela_terreno_inicial_atual
-            investimento_total += parcela_terreno_inicial_mes
+        if saldo_financiamento_terreno > 0:
+            parcela_terreno_inicial_mes = min(parcela_terreno_inicial_atual, saldo_financiamento_terreno)
+            saldo_financiamento_terreno -= parcela_terreno_inicial_mes
+            # CORREÇÃO: Parcelas do terreno NÃO são investimento, são despesas operacionais
+            # investimento_total += parcela_terreno_inicial_mes  # REMOVIDO
 
-        # CORREÇÃO 1: A base de cálculo para distribuição deve considerar TODAS as despesas do mês.
+        # CORREÇÃO 4: Cálculo correto do lucro líquido
         lucro_liquido_antes_distribuicao = lucro_operacional_mes - parcela_terreno_inicial_mes
-        caixa += lucro_liquido_antes_distribuicao # O caixa aumenta com o lucro líquido
+        caixa += lucro_liquido_antes_distribuicao  # O caixa aumenta com o lucro líquido
 
         fundo_mes_total, retirada_mes_efetiva = 0.0, 0.0
         if lucro_liquido_antes_distribuicao > 0:
@@ -218,6 +227,18 @@ def simulate(_config, reinvestment_strategy):
                 retirada_mes_efetiva = retirada_potencial
             
             fundo_mes_total += excesso
+        
+        # CORREÇÃO 5: Verificação de saldo para retiradas e fundos
+        total_distribuicao = retirada_mes_efetiva + fundo_mes_total
+        if total_distribuicao > caixa:
+            # Proporcionalmente reduz retiradas e fundos se caixa insuficiente
+            if caixa > 0:
+                proporcao = caixa / total_distribuicao
+                retirada_mes_efetiva *= proporcao
+                fundo_mes_total *= proporcao
+            else:
+                retirada_mes_efetiva = 0.0
+                fundo_mes_total = 0.0
         
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
@@ -261,8 +282,8 @@ def simulate(_config, reinvestment_strategy):
             manut_p_mod_rented *= correction_factor; manut_p_mod_owned *= correction_factor; aluguel_mensal_corrente *= correction_factor; parcelas_terrenos_novos_mensal_corrente *= correction_factor
             parcela_terreno_inicial_atual *= correction_factor; aluguel_p_novo_mod *= correction_factor; parcela_p_novo_terreno *= correction_factor
 
-        # CORREÇÃO 2: Patrimônio líquido não deve incluir o valor de ativos alugados.
-        patrimonio_liquido = (modules_owned * custo_modulo_atual_owned) + caixa + fundo_ac + cfg_owned['land_total_value'] + valor_terrenos_adicionais
+        # CORREÇÃO 6: Patrimônio líquido calculado corretamente
+        patrimonio_liquido = (modules_owned * custo_modulo_atual_owned) + caixa + fundo_ac + cfg_owned['land_total_value'] + valor_terrenos_adicionais - saldo_financiamento_terreno
         
         rows.append({
             "Mês": m, "Ano": (m - 1) // 12 + 1, "Módulos Ativos": modules_owned + modules_rented,
