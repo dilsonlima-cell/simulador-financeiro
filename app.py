@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — Versão Consolidada e Atualizada
+# Simulador Modular — Versão Consolidada com Campos Automáticos
 
 import streamlit as st
 import pandas as pd
@@ -88,14 +88,12 @@ st.markdown(f"""
 
 # --- FUNÇÕES HELPER ---
 def fmt_brl(v):
-    """Formata um valor numérico como uma string de moeda brasileira."""
     try:
         return f"R$ {v:,.2f}"
     except (ValueError, TypeError):
         return "R$ 0,00"
 
 def render_kpi_card(title, value, color):
-    """Renderiza um cartão de KPI com título, valor e cor de fundo."""
     st.markdown(f"""
         <div class="kpi-card" style="background-color: {color};">
             <div class="kpi-card-title">{title}</div>
@@ -104,7 +102,6 @@ def render_kpi_card(title, value, color):
     """, unsafe_allow_html=True)
 
 def df_to_excel_bytes(df: pd.DataFrame):
-    """Converte um DataFrame para bytes de um arquivo Excel, formatando colunas."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Simulacao_Mensal')
@@ -119,7 +116,6 @@ def df_to_excel_bytes(df: pd.DataFrame):
     return output.getvalue()
 
 def slug(s: str) -> str:
-    """Converte uma string em um formato seguro para chaves e nomes de arquivo."""
     s = s.lower()
     s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
     return s[:60]
@@ -143,8 +139,7 @@ def simulate(_config, reinvestment_strategy):
     retiradas_ac = 0.0
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
     custo_modulo_atual_owned = cfg_owned['cost_per_module']
-    
-    # ALTERAÇÃO: A variável para valor de terrenos adicionais foi removida da lógica principal.
+    # ALTERAÇÃO: Variável restaurada para calcular o valor de terrenos adicionais.
     valor_terrenos_adicionais = 0.0
 
     valor_entrada_terreno = 0.0
@@ -155,7 +150,6 @@ def simulate(_config, reinvestment_strategy):
         valor_parcela_terreno_inicial = valor_financiado / cfg_owned['land_installments'] if cfg_owned['land_installments'] > 0 else 0
         investimento_total += valor_entrada_terreno
 
-    # ALTERAÇÃO: O aluguel mensal agora é um valor fixo.
     aluguel_mensal_corrente = cfg_rented['rent_value']
     parcelas_terrenos_novos_mensal_corrente = 0.0
     compra_intercalada_counter = 0
@@ -208,19 +202,21 @@ def simulate(_config, reinvestment_strategy):
                     if reinvestment_strategy == 'buy':
                         modules_owned += novos_modulos_comprados
                         parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * cfg_owned['monthly_land_plot_parcel']
-                        # ALTERAÇÃO: Lógica de valorização de terrenos adicionais removida.
+                        # ALTERAÇÃO: Lógica para adicionar valor de terrenos novos ao patrimônio foi restaurada.
+                        valor_terrenos_adicionais += novos_modulos_comprados * cfg_owned['land_value_per_module']
                     elif reinvestment_strategy == 'rent':
                         modules_rented += novos_modulos_comprados
-                        # ALTERAÇÃO: Lógica de aumento de aluguel para novos módulos removida.
+                        # ALTERAÇÃO: Lógica de aumento do aluguel restaurada.
+                        aluguel_mensal_corrente += novos_modulos_comprados * cfg_rented['rent_per_new_module']
                     elif reinvestment_strategy == 'alternate':
                         for _ in range(novos_modulos_comprados):
                             if compra_intercalada_counter % 2 == 0:
                                 modules_owned += 1
                                 parcelas_terrenos_novos_mensal_corrente += cfg_owned['monthly_land_plot_parcel']
-                                # ALTERAÇÃO: Lógica de valorização de terrenos adicionais removida.
+                                valor_terrenos_adicionais += cfg_owned['land_value_per_module']
                             else:
                                 modules_rented += 1
-                                # ALTERAÇÃO: Lógica de aumento de aluguel para novos módulos removida.
+                                aluguel_mensal_corrente += cfg_rented['rent_per_new_module']
                             compra_intercalada_counter += 1
             custo_modulo_atual_owned *= (1 + cfg_owned['cost_correction_rate'] / 100.0)
             custo_modulo_atual_rented *= (1 + cfg_rented['cost_correction_rate'] / 100.0)
@@ -252,13 +248,16 @@ def get_default_config():
         'rented': {
             'modules_init': 1, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0,
             'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
-            'rent_value': 750.0 # ALTERAÇÃO: rent_per_new_module removido.
+            'rent_value': 750.0,
+            # ALTERAÇÃO: Campo restaurado.
+            'rent_per_new_module': 950.0 # Soma de maintenance (200) + rent_value (750)
         },
         'owned': {
             'modules_init': 0, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0,
             'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
             'monthly_land_plot_parcel': 0.0,
-            # ALTERAÇÃO: land_value_per_module removido.
+             # ALTERAÇÃO: Campo restaurado.
+            'land_value_per_module': 200.0, # Soma de parcel (0) + maintenance (200)
             'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120
         },
         'global': {
@@ -307,7 +306,15 @@ if st.session_state.active_page == 'Configurações':
     cfg_r['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_r['maintenance_per_module'], format="%.2f", key="rent_maint_mod")
     cfg_r['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_r['cost_correction_rate'], format="%.1f", key="rent_corr_rate")
     cfg_r['rent_value'] = c2.number_input("Aluguel mensal fixo (R$)", 0.0, value=cfg_r['rent_value'], format="%.2f", key="rent_base_rent")
-    # ALTERAÇÃO: Campo "Custo de aluguel por novo módulo" foi removido.
+    
+    # ALTERAÇÃO: Cálculo automático e exibição do campo restaurado.
+    cfg_r['rent_per_new_module'] = cfg_r['maintenance_per_module'] + cfg_r['rent_value']
+    c1.number_input(
+        "Custo de aluguel por novo módulo (R$)", 0.0,
+        value=cfg_r['rent_per_new_module'], format="%.2f",
+        key="rent_new_rent", disabled=True,
+        help="Preenchido automaticamente (Manutenção + Aluguel Fixo)."
+    )
     st.markdown('</div><br>', unsafe_allow_html=True)
 
     # Card: Terreno Comprado
@@ -327,20 +334,17 @@ if st.session_state.active_page == 'Configurações':
         valor_parcela = valor_financiado / cfg_o['land_installments'] if cfg_o['land_installments'] > 0 else 0
         c2_fin.metric("Valor da Entrada", fmt_brl(valor_entrada))
         c2_fin.metric("Valor da Parcela", fmt_brl(valor_parcela))
-        # ALTERAÇÃO: O valor da parcela para novos terrenos é definido automaticamente.
         cfg_o['monthly_land_plot_parcel'] = valor_parcela
-
+    
     st.markdown("---")
     st.markdown("###### Parâmetros do Módulo Próprio")
     c1, c2 = st.columns(2)
     cfg_o['modules_init'] = c1.number_input("Módulos iniciais (próprios)", 0, value=cfg_o['modules_init'], key="own_mod_init")
     cfg_o['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_o['cost_per_module'], format="%.2f", key="own_cost_mod")
     cfg_o['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_o['revenue_per_module'], format="%.2f", key="own_rev_mod")
-    # ALTERAÇÃO: Campo "Valor do terreno por novo módulo" foi removido.
     cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
     cfg_o['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_o['cost_correction_rate'], format="%.1f", key="own_corr_rate")
     
-    # ALTERAÇÃO: Este campo agora usa o valor da configuração (definido acima) e é desabilitado se houver financiamento.
     cfg_o['monthly_land_plot_parcel'] = c2.number_input(
         "Parcela mensal por novo terreno (R$)", 0.0, 
         value=cfg_o.get('monthly_land_plot_parcel', 0.0), 
@@ -348,9 +352,18 @@ if st.session_state.active_page == 'Configurações':
         disabled=(cfg_o['land_total_value'] > 0), 
         help="Este valor é preenchido automaticamente se um financiamento de terreno inicial for configurado."
     )
+    
+    # ALTERAÇÃO: Cálculo automático e exibição do campo restaurado.
+    cfg_o['land_value_per_module'] = cfg_o['monthly_land_plot_parcel'] + cfg_o['maintenance_per_module']
+    c1.number_input(
+        "Valor do terreno por novo módulo (R$)", 0.0,
+        value=cfg_o['land_value_per_module'], format="%.2f",
+        key="own_land_value_per_module", disabled=True,
+        help="Preenchido automaticamente (Parcela do Terreno + Manutenção)."
+    )
     st.markdown('</div><br>', unsafe_allow_html=True)
 
-    # Card: Parâmetros Globais
+    # Card: Parâmetros Globais e Eventos Financeiros (sem alterações)
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Parâmetros Globais")
     cfg_g = st.session_state.config['global']
@@ -359,7 +372,6 @@ if st.session_state.active_page == 'Configurações':
     cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em % do lucro.")
     st.markdown('</div><br>', unsafe_allow_html=True)
 
-    # Card: Eventos Financeiros
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Eventos Financeiros")
     st.markdown("<h6>Aportes (investimentos pontuais)</h6>", unsafe_allow_html=True)
