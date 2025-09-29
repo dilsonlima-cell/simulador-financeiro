@@ -1,478 +1,527 @@
 # app.py
-# Simulador Modular — UI suave + correções
-# Execução: streamlit run app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.express as px
 from io import BytesIO
-from datetime import datetime
-import re
 
-# --------------------------------------------------------------------------------------
-# Configuração geral
-# --------------------------------------------------------------------------------------
-st.set_page_config(
-    page_title="Simulador Modular",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# --- Cores personalizadas e Configurações Iniciais ---
+BG_COLOR = "#F7F7F5"
+CARD_COLOR = "#FFFFFF"
+TEXT_COLOR = "#212529"
+MUTED_TEXT_COLOR = "#5a5a5a"
+TABLE_BORDER_COLOR = "#E0E0E0"
+SIDEBAR_BG = "#086788"
+SIDEBAR_TEXT_COLOR = "#FFFFFF"
+GRADIENT_START = "#07A0C3"
+GRADIENT_END = "#F0C808"
+CUSTOM_GRADIENT = f"linear-gradient(90deg, {GRADIENT_START}, {GRADIENT_END})"
+CHART_CAIXA_COLOR = "#F0C808"
+CHART_FUNDO_COLOR = "#07A0C3"
+CHART_RETIRADAS_COLOR = "#DD1C1A"
+CHART_MODULOS_PROPRIOS_COLOR = SIDEBAR_BG
+CHART_MODULOS_ALUGADOS_COLOR = "#6c757d"
+KPI_INVESTIMENTO_COLOR = "#6c757d"
+KPI_PATRIMONIO_COLOR = "#212529"
 
-# --------------------------------------------------------------------------------------
-# Estilos (cores suaves, KPIs discretos, cartões ON/OFF, botões claros)
-# --------------------------------------------------------------------------------------
-st.markdown("""
-<style>
-:root{
-  --bg:#F7F9FC;
-  --card:#FFFFFF;
-  --text:#1F2937;       /* Gray-800 */
-  --muted:#6B7280;      /* Gray-500 */
-  --border:#E5E7EB;     /* Gray-200 */
-  --grid:#EEF2F7;
-  /* Paleta de Azuis Corporativos */
-  --brand-900: #1E3A8A; /* Azul escuro para títulos */
-  --brand-700: #1D4ED8;
-  --brand-500: #3B82F6; /* Azul principal suave */
-  --brand-100: #DBEAFE;
-  --brand-50: #EFF6FF;  /* Fundo sutil */
-  
-  --green:#22C55E;
-  --teal:#14B8A6;
-  --orange:#F59E0B;
-  --red:#EF4444;
-}
-
-body, .stApp{ background:var(--bg)!important; color:var(--text); }
-.main .block-container{ padding:1.25rem 1.5rem; }
-
-/* Sidebar */
-section[data-testid="stSidebar"] { background: var(--text); }
-section[data-testid="stSidebar"] .css-1wvskkq, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2{
-  color:#F9FAFB !important;
-}
-section[data-testid="stSidebar"] .st-emotion-cache-1g8pund{ color:#D1D5DB; } /* Descrição */
-section[data-testid="stSidebar"] .stRadio > label {
-    background-color: #374151;
-    border-radius: 8px;
-    color: #F9FAFB !important;
-}
-section[data-testid="stSidebar"] .st-emotion-cache-1wmy9hl:checked + div {
-    color: var(--brand-500) !important; /* Cor do texto do rádio selecionado */
-}
-
-
-/* Botões padrão claros */
-.stButton button{
-  background: var(--card);
-  color: var(--brand-500);
-  border: 1px solid var(--brand-500);
-  border-radius: 10px;
-  font-weight: 600;
-}
-.stButton button:hover{
-  background: var(--brand-50);
-}
-
-/* KPI suave (cartão) */
-.kpi-soft{
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 14px;
-  box-shadow: 0 1px 2px rgba(16,24,40,.04);
-  position: relative;
-  height: 100%;
-}
-.kpi-soft:before{
-  content:"";
-  position:absolute; left:0; top:0; bottom:0; width:6px;
-  background: var(--accent, var(--brand-500)); border-top-left-radius:12px; border-bottom-left-radius:12px;
-}
-.kpi-soft .label{ font-size:.85rem; color:var(--muted); font-weight:600; margin-bottom:.35rem; }
-.kpi-soft .value{ font-size:1.6rem; font-weight:700; color:var(--text); }
-
-/* Títulos na aba Relatórios com cor azul */
-.report-title {
-    color: var(--brand-900) !important;
-}
-/* Legendas e textos secundários na aba Relatórios */
-.report-muted {
-    color: var(--brand-700) !important;
-}
-
-/* Info box mais clean */
-[data-testid="stInfo"], [data-testid="stSuccess"] { 
-    background: var(--brand-50); 
-    border: 1px solid var(--brand-100); 
-    color: var(--brand-900); 
-    border-radius: 8px;
-}
-
-/* Dataframe borda suave */
-div[data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: 8px; }
-</style>
+# ---------------------------
+# CSS - Estilos da Página
+# ---------------------------
+st.set_page_config(page_title="Simulador Modular", layout="wide", initial_sidebar_state="expanded")
+st.markdown(f"""
+    <style>
+        .main .block-container {{ padding: 2rem; }}
+        [data-testid="stSidebar"] {{ background-color: {SIDEBAR_BG}; }}
+        [data-testid="stSidebar"] .stMarkdown h1 {{ padding-top: 1rem; color: {SIDEBAR_TEXT_COLOR}; }}
+        [data-testid="stSidebar"] .stMarkdown p {{ color: rgba(255, 255, 255, 0.8); }}
+        .stRadio > div {{ gap: 0.5rem; }}
+        .stRadio > label > div {{ font-size: 1.1rem !important; font-weight: 600 !important; padding: 0.5rem 0.75rem !important; border-radius: 0.5rem !important; margin-bottom: 0.5rem; color: rgba(255, 255, 255, 0.8) !important; transition: all 0.2s; }}
+        .stRadio > div[role="radiogroup"] > label:has(div[data-baseweb="radio"][class*="e1y5xkzn3"]) > div {{ background-color: rgba(255, 255, 255, 0.1) !important; color: {SIDEBAR_TEXT_COLOR} !important; border-left: 3px solid {GRADIENT_END}; }}
+        .stApp {{ background-color: {BG_COLOR}; }}
+        .header-title, h1, h2, h3, h4, h5, h6, label, .st-emotion-cache-16idsys p {{ color: {TEXT_COLOR} !important; }}
+        .subhead, .st-emotion-cache-1ghhuty p {{ color: {MUTED_TEXT_COLOR} !important; }}
+        [data-testid="stMetricLabel"] p {{ color: {MUTED_TEXT_COLOR} !important; }}
+        [data-testid="stMetricValue"] div {{ color: {TEXT_COLOR} !important; }}
+        .card {{ background: {CARD_COLOR}; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid {TABLE_BORDER_COLOR}; height: 100%; }}
+        .kpi-value {{ font-size: 1.8rem; font-weight: 700; }}
+        .kpi-colored {{ padding: 1.5rem; border-radius: 12px; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.06); height: 100%; }}
+        .kpi-gradient {{ padding: 1.5rem; border-radius: 12px; background: {CUSTOM_GRADIENT}; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.06); height: 100%; }}
+        .kpi-colored .small-muted, .kpi-gradient .small-muted {{ color: rgba(255,255,255,0.8); font-size: 0.9rem; }}
+        .stDataFrame, .stTable {{ border: none; box-shadow: none; padding: 0; }}
+        table {{ width: 100%; }}
+    </style>
 """, unsafe_allow_html=True)
 
-# --------------------------------------------------------------------------------------
-# Helpers
-# --------------------------------------------------------------------------------------
-def fmt_brl(x):
-    try:
-        return f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except (ValueError, TypeError):
-        return "R$ 0,00"
+# ---------------------------
+# Funções Utilitárias e de Lógica
+# ---------------------------
+def fmt_brl(v):
+    return f"R$ {v:,.2f}"
 
-def light_layout(fig: go.Figure, title=""):
-    fig.update_layout(
-        title=dict(text=f"<b>{title}</b>", font=dict(size=18, color="var(--brand-900)")),
-        template="plotly_white",
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        font=dict(family="Inter, Calibri, system-ui, sans-serif", color="#1F2937"),
-        xaxis=dict(gridcolor="#EEF2F7", zerolinecolor="#EEF2F7"),
-        yaxis=dict(gridcolor="#EEF2F7", zerolinecolor="#EEF2F7"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    return fig
-
-def render_kpi_soft(title, value, accent="#3B82F6"):
-    st.markdown(
-        f"""
-        <div class="kpi-soft" style="--accent:{accent};">
-          <div class="label">{title}</div>
-          <div class="value">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def to_excel_download(df: pd.DataFrame, filename: str = "relatorio.xlsx"):
+def df_to_excel_bytes(df: pd.DataFrame):
     output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Dados")
-        workbook  = writer.book
-        worksheet = writer.sheets["Dados"]
-        money_fmt = workbook.add_format({"num_format": 'R$ #,##0.00'})
-        for col_idx, col_name in enumerate(df.columns):
-            width = max(15, int(df[col_name].astype(str).str.len().max()))
-            worksheet.set_column(col_idx, col_idx, width)
-            if any(k in col_name.lower() for k in ["receita","gasto","caixa","patrimônio","invest","custo","aporte","total"]):
-                worksheet.set_column(col_idx, col_idx, width, money_fmt)
-    st.download_button(
-        "Baixar Excel",
-        data=output.getvalue(),
-        file_name=filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-        key=f"dl_{filename}_{len(df)}_{df.columns[0] if len(df.columns) > 0 else ''}"
-    )
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Simulacao_Mensal')
+    return output.getvalue()
 
-def slug(s: str) -> str:
-    s = s.lower()
-    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
-    return s[:60]
+def simulate(config, reinvestment_strategy):
+    cfg_rented = config['rented']
+    cfg_owned = config['owned']
+    cfg_global = config['global']
 
-# --------------------------------------------------------------------------------------
-# Estado inicial (configurações padrão)
-# --------------------------------------------------------------------------------------
-def init_state():
-    if "cfg" not in st.session_state:
-        st.session_state.cfg = dict(
-            meses=120,
-            investimento_inicial=75000.0,
-            aporte_mensal=4500.0,
-            mod_inicial=1,
-            custo_modulo=7500.0,
-            receita_por_modulo=280.0,
-            taxa_ocupacao=0.95,
-            gasto_por_modulo=150.0,
-            incremento_modulos=1,
-            intervalo_incremento=6,
-            custo_terreno=120000.0,
-            aluguel_terreno_mensal=2500.0,
-            imposto_terreno_mensal=150.0,
-            mes_compra_intercalar=36,
-            fator_revenda=0.60
-        )
-    if "selected_strategy" not in st.session_state:
-        st.session_state.selected_strategy = "Comprar"
-
-init_state()
-
-# --------------------------------------------------------------------------------------
-# Motor de simulação
-# --------------------------------------------------------------------------------------
-@st.cache_data
-def simulate(strategy: str, **cfg) -> pd.DataFrame:
-    # ... (A LÓGICA DE SIMULAÇÃO PERMANECE A MESMA) ...
-    # (O código completo da função foi omitido aqui para não repetir,
-    # mas ele é idêntico ao que você enviou na sua última mensagem)
-    # >>> INÍCIO DA LÓGICA DE SIMULAÇÃO (idêntica à sua) <<<
-    meses = int(cfg["meses"])
-    aporte_mensal = float(cfg["aporte_mensal"])
-    investimento_inicial = float(cfg["investimento_inicial"])
-    mod = int(cfg["mod_inicial"])
-    custo_modulo = float(cfg["custo_modulo"])
-    receita_mod = float(cfg["receita_por_modulo"])
-    ocup = float(cfg["taxa_ocupacao"])
-    gasto_mod = float(cfg["gasto_por_modulo"])
-    inc_mod = int(cfg["incremento_modulos"])
-    int_inc = int(cfg["intervalo_incremento"])
-    custo_terreno = float(cfg["custo_terreno"])
-    aluguel_terreno_mensal = float(cfg["aluguel_terreno_mensal"])
-    imposto_terreno_mensal = float(cfg["imposto_terreno_mensal"])
-    mes_compra_intercalar = int(cfg["mes_compra_intercalar"])
-    fator_revenda = float(cfg["fator_revenda"])
-
-    anos_base = datetime.now().year
+    months = cfg_global['years'] * 12
     rows = []
-    caixa = investimento_inicial
-    receitas_acum = 0.0
-    gastos_acum = 0.0
-    investimento_total = investimento_inicial
-    possui_terreno = False
 
-    if strategy == "Comprar":
-        caixa -= custo_terreno
-        investimento_total += custo_terreno
-        possui_terreno = True
+    modules_rented = cfg_rented['modules_init']
+    modules_owned = cfg_owned['modules_init']
 
-    for m in range(meses):
-        ano = anos_base + (m // 12)
-        mes = (m % 12) + 1
+    caixa = 0.0
+    investimento_total = (modules_rented * cfg_rented['cost_per_module']) + (modules_owned * cfg_owned['cost_per_module'])
 
-        if strategy == "Intercalar" and (m + 1 == mes_compra_intercalar) and (not possui_terreno):
-            caixa -= custo_terreno
-            investimento_total += custo_terreno
-            possui_terreno = True
+    fundo_ac = 0.0
+    retiradas_ac = 0.0
 
-        novos = inc_mod if (m > 0 and (m % int_inc == 0)) else 0
-        if novos > 0:
-            custo_novos = novos * custo_modulo
-            caixa -= custo_novos
-            investimento_total += custo_novos
-            mod += novos
+    custo_modulo_atual_rented = cfg_rented['cost_per_module']
+    custo_modulo_atual_owned = cfg_owned['cost_per_module']
 
-        caixa += aporte_mensal
-        investimento_total += aporte_mensal
+    aportes_map = {a["mes"]: a.get("valor", 0.0) for a in cfg_global['aportes']}
 
-        receita = mod * receita_mod * ocup
-        gastos_var = mod * gasto_mod
+    # Financiamento do terreno inicial (mantido como antes)
+    valor_entrada_terreno = 0.0
+    valor_parcela_terreno_inicial = 0.0
+    if cfg_owned['land_total_value'] > 0:
+        valor_entrada_terreno = cfg_owned['land_total_value'] * (cfg_owned['land_down_payment_pct'] / 100.0)
+        valor_financiado = cfg_owned['land_total_value'] - valor_entrada_terreno
+        valor_parcela_terreno_inicial = valor_financiado / cfg_owned['land_installments'] if cfg_owned['land_installments'] > 0 else 0
+        investimento_total += valor_entrada_terreno
 
-        aluguel = aluguel_terreno_mensal if (strategy == "Alugar" or (strategy == "Intercalar" and not possui_terreno)) else 0.0
-        imposto = imposto_terreno_mensal if possui_terreno else 0.0
+    aluguel_mensal_corrente = cfg_rented['rent_value']
 
-        caixa += receita
-        caixa -= (gastos_var + aluguel + imposto)
-        receitas_acum += receita
-        gastos_acum += (gastos_var + aluguel + imposto)
+    # NOVO: parcelas mensais decorrentes de terrenos comprados em expansões
+    parcelas_terrenos_novos_mensal_corrente = 0.0
 
-        patrimonio_liquido = caixa + (mod * custo_modulo * fator_revenda) + (custo_terreno * (1.00 if possui_terreno else 0.0))
+    compra_intercalada_counter = 0
 
-        rows.append(dict(
-            Estratégia=strategy, Mês=m+1, Ano=ano,
-            Módulos_Ativos=mod, Receita=round(receita,2),
-            Gastos=round(gastos_var + aluguel + imposto,2),
-            Aporte=round(aporte_mensal,2), Caixa_Final=round(caixa,2),
-            Receitas_Acumuladas=round(receitas_acum,2),
-            Gastos_Acumulados=round(gastos_acum,2),
-            Investimento_Total=round(investimento_total,2),
-            Patrimônio_Líquido=round(patrimonio_liquido,2),
-            Aluguel=round(aluguel, 2), Imposto=round(imposto, 2) # Adicionando colunas para análise
-        ))
-    # >>> FIM DA LÓGICA DE SIMULAÇÃO <<<
+    for m in range(1, months + 1):
+        receita = (modules_rented * cfg_rented['revenue_per_module']) + (modules_owned * cfg_owned['revenue_per_module'])
+        manut = (modules_rented * cfg_rented['maintenance_per_module']) + (modules_owned * cfg_owned['maintenance_per_module'])
+
+        novos_modulos_comprados = 0
+
+        # Aportes
+        aporte_mes = aportes_map.get(m, 0.0)
+        caixa += aporte_mes
+        investimento_total += aporte_mes
+
+        # Lucro operacional: inclui agora as parcelas mensais dos novos terrenos
+        lucro_operacional_mes = receita - manut - aluguel_mensal_corrente - parcelas_terrenos_novos_mensal_corrente
+
+        # Parcela do terreno inicial (se houver), mantida como antes
+        parcela_terreno_inicial_mes = 0.0
+        if cfg_owned['land_total_value'] > 0 and m <= cfg_owned['land_installments']:
+            parcela_terreno_inicial_mes = valor_parcela_terreno_inicial
+            investimento_total += valor_parcela_terreno_inicial  # mantido conforme lógica existente
+
+        # Entrada do terreno inicial no mês 1
+        if m == 1:
+            caixa -= valor_entrada_terreno
+
+        # Aplica lucro e parcelas
+        caixa += lucro_operacional_mes
+        caixa -= parcela_terreno_inicial_mes
+
+        # Regras de Retiradas e Fundos (mesma lógica)
+        fundo_mes_total, retirada_mes_efetiva = 0.0, 0.0
+        if lucro_operacional_mes > 0:
+            base_distribuicao = lucro_operacional_mes
+            retirada_potencial = sum(base_distribuicao * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
+            fundo_mes_total = sum(base_distribuicao * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
+
+            excesso = 0.0
+            if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
+                excesso = retirada_potencial - cfg_global['max_withdraw_value']
+                retirada_mes_efetiva = cfg_global['max_withdraw_value']
+            else:
+                retirada_mes_efetiva = retirada_potencial
+            fundo_mes_total += excesso
+
+        caixa -= (retirada_mes_efetiva + fundo_mes_total)
+        retiradas_ac += retirada_mes_efetiva
+        fundo_ac += fundo_mes_total
+
+        # Expansão anual (fim de ano)
+        if m % 12 == 0:
+            custo_expansao = 0.0
+            if reinvestment_strategy == 'buy':
+                # Agora considera apenas o custo do módulo
+                custo_expansao = custo_modulo_atual_owned
+            elif reinvestment_strategy == 'rent':
+                custo_expansao = custo_modulo_atual_rented
+            elif reinvestment_strategy == 'alternate':
+                if compra_intercalada_counter % 2 == 0:
+                    custo_expansao = custo_modulo_atual_owned  # apenas módulo quando compra
+                else:
+                    custo_expansao = custo_modulo_atual_rented
+
+            if custo_expansao > 0 and caixa >= custo_expansao:
+                # Quantos módulos cabem no caixa
+                novos_modulos_comprados = int(caixa // custo_expansao)
+                if novos_modulos_comprados > 0:
+                    custo_da_compra = novos_modulos_comprados * custo_expansao
+                    caixa -= custo_da_compra
+                    investimento_total += custo_da_compra
+
+                    if reinvestment_strategy == 'buy':
+                        modules_owned += novos_modulos_comprados
+                        # Acrescenta parcelas mensais dos novos terrenos (recorrente)
+                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * cfg_owned['monthly_land_plot_parcel']
+
+                    elif reinvestment_strategy == 'rent':
+                        modules_rented += novos_modulos_comprados
+                        aluguel_mensal_corrente += novos_modulos_comprados * cfg_rented['rent_per_new_module']
+
+                    elif reinvestment_strategy == 'alternate':
+                        for _ in range(novos_modulos_comprados):
+                            if compra_intercalada_counter % 2 == 0:
+                                modules_owned += 1
+                                parcelas_terrenos_novos_mensal_corrente += cfg_owned['monthly_land_plot_parcel']
+                            else:
+                                modules_rented += 1
+                                aluguel_mensal_corrente += cfg_rented['rent_per_new_module']
+                            compra_intercalada_counter += 1
+
+            # Correções anuais de custo
+            custo_modulo_atual_owned *= (1 + cfg_owned['cost_correction_rate'] / 100.0)
+            custo_modulo_atual_rented *= (1 + cfg_rented['cost_correction_rate'] / 100.0)
+
+        # Patrimônio líquido (mantido)
+        patrimonio_liquido = ((modules_owned + modules_rented) * custo_modulo_atual_owned) + caixa + fundo_ac + cfg_owned['land_total_value']
+
+        # Registro da linha (Gastos agora inclui parcelas de novos terrenos)
+        rows.append({
+            "Mês": m,
+            "Ano": (m - 1) // 12 + 1,
+            "Módulos Ativos": modules_owned + modules_rented,
+            "Módulos Alugados": modules_rented,
+            "Módulos Próprios": modules_owned,
+            "Receita": receita,
+            "Manutenção": manut,
+            "Aluguel": aluguel_mensal_corrente,
+            "Parcelas Terrenos (Novos)": parcelas_terrenos_novos_mensal_corrente,
+            "Gastos": manut + aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente,
+            "Aporte": aporte_mes,
+            "Fundo (Mês)": fundo_mes_total,
+            "Retirada (Mês)": retirada_mes_efetiva,
+            "Caixa (Final Mês)": caixa,
+            "Investimento Total Acumulado": investimento_total,
+            "Fundo Acumulado": fundo_ac,
+            "Retiradas Acumuladas": retiradas_ac,
+            "Módulos Comprados no Ano": novos_modulos_comprados,
+            "Patrimônio Líquido": patrimonio_liquido
+        })
+
     return pd.DataFrame(rows)
 
-# --------------------------------------------------------------------------------------
-# Sidebar (navegação)
-# --------------------------------------------------------------------------------------
-st.sidebar.title("Simulador Modular")
-st.sidebar.caption("Projeto com reinvestimento")
-page = st.sidebar.radio(
-    "Navegação",
-    options=["Configurações", "Dashboard", "Relatórios e Dados"],
-    index=["Configurações", "Dashboard", "Relatórios e Dados"].index("Dashboard"),
-    key="nav_radio_unique"
-)
+# ---------------------------
+# Inicialização e Gerenciamento do Estado
+# ---------------------------
+def get_default_config():
+    return {
+        'rented': {
+            'modules_init': 1,
+            'cost_per_module': 75000.0,
+            'cost_correction_rate': 5.0,
+            'revenue_per_module': 4500.0,
+            'maintenance_per_module': 200.0,
+            'rent_value': 750.0,
+            'rent_per_new_module': 750.0
+        },
+        'owned': {
+            'modules_init': 0,
+            'cost_per_module': 75000.0,
+            'cost_correction_rate': 5.0,
+            'revenue_per_module': 4500.0,
+            'maintenance_per_module': 200.0,
+            # Campo renomeado: parcela mensal por novo terreno
+            'monthly_land_plot_parcel': 50000.0,  # mantém o valor anterior; ajuste conforme seu cenário
+            'land_total_value': 0.0,
+            'land_down_payment_pct': 20.0,
+            'land_installments': 120
+        },
+        'global': {
+            'years': 15,
+            'max_withdraw_value': 50000.0,
+            'aportes': [{"mes": 3, "valor": 0.0}],
+            'retiradas': [{"mes": 25, "percentual": 30.0}],
+            'fundos': [{"mes": 25, "percentual": 10.0}]
+        }
+    }
 
-# --------------------------------------------------------------------------------------
-# Página: Configurações
-# --------------------------------------------------------------------------------------
-if page == "Configurações":
-    st.subheader("Defina parâmetros iniciais e eventos financeiros")
-    cfg = st.session_state.cfg
-    
-    with st.container(border=True):
-        st.markdown("#### Parâmetros Gerais")
-        c1, c2, c3, c4 = st.columns(4)
-        cfg["meses"] = c1.number_input("Meses de simulação", 12, None, int(cfg["meses"]), 12, key="cfg_meses")
-        cfg["investimento_inicial"] = c2.number_input("Investimento inicial (R$)", 0.0, None, float(cfg["investimento_inicial"]), 1000.0, "%.2f", key="cfg_inv_ini")
-        cfg["aporte_mensal"] = c3.number_input("Aporte mensal (R$)", 0.0, None, float(cfg["aporte_mensal"]), 100.0, "%.2f", key="cfg_aporte")
-        cfg["taxa_ocupacao"] = c4.number_input("Taxa de ocupação (%)", 0.0, 1.0, float(cfg["taxa_ocupacao"]), 0.01, "%.2f", key="cfg_ocup")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    with st.container(border=True):
-        st.markdown("#### Parâmetros dos Módulos")
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
-        cfg["mod_inicial"] = m1.number_input("Módulos iniciais", 0, None, int(cfg["mod_inicial"]), 1, key="cfg_mod_ini")
-        cfg["custo_modulo"] = m2.number_input("Custo por módulo (R$)", 0.0, None, float(cfg["custo_modulo"]), 500.0, "%.2f", key="cfg_custo_mod")
-        cfg["receita_por_modulo"] = m3.number_input("Receita por módulo (R$/mês)", 0.0, None, float(cfg["receita_por_modulo"]), 10.0, "%.2f", key="cfg_receita_mod")
-        cfg["gasto_por_modulo"] = m4.number_input("Gasto por módulo (R$/mês)", 0.0, None, float(cfg["gasto_por_modulo"]), 10.0, "%.2f", key="cfg_gasto_mod")
-        cfg["incremento_modulos"] = m5.number_input("Incremento de módulos", 0, None, int(cfg["incremento_modulos"]), 1, key="cfg_inc_mod")
-        cfg["intervalo_incremento"] = m6.number_input("Intervalo de incremento (meses)", 1, None, int(cfg["intervalo_incremento"]), 1, key="cfg_int_inc")
+def migrate_config(cfg: dict) -> dict:
+    """Migra chaves antigas para o novo padrão sem quebrar sessões existentes."""
+    owned = cfg.get('owned', {})
+    # Renomeia cost_per_land_plot -> monthly_land_plot_parcel, se necessário
+    if 'monthly_land_plot_parcel' not in owned and 'cost_per_land_plot' in owned:
+        owned['monthly_land_plot_parcel'] = owned.pop('cost_per_land_plot')
+    cfg['owned'] = owned
+    return cfg
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    with st.container(border=True):
-        st.markdown("#### Parâmetros do Terreno e Revenda")
-        t1, t2, t3, t4, t5 = st.columns(5)
-        cfg["custo_terreno"] = t1.number_input("Custo do terreno (R$)", 0.0, None, float(cfg["custo_terreno"]), 1000.0, "%.2f", key="cfg_custo_terreno")
-        cfg["aluguel_terreno_mensal"] = t2.number_input("Aluguel do terreno (R$/mês)", 0.0, None, float(cfg["aluguel_terreno_mensal"]), 100.0, "%.2f", key="cfg_aluguel_terreno")
-        cfg["imposto_terreno_mensal"] = t3.number_input("Imposto/Condomínio (R$/mês)", 0.0, None, float(cfg["imposto_terreno_mensal"]), 10.0, "%.2f", key="cfg_imposto_terreno")
-        cfg["mes_compra_intercalar"] = t4.number_input("Intercalar: mês de compra", 1, None, int(cfg["mes_compra_intercalar"]), 1, key="cfg_mes_compra")
-        cfg["fator_revenda"] = t5.number_input("Fator de revenda (%)", 0.0, 1.0, float(cfg["fator_revenda"]), 0.01, "%.2f", help="Percentual do custo do módulo considerado no cálculo do patrimônio.")
-    
-    st.session_state.cfg = cfg
-    st.success("Configurações salvas. Acesse o Dashboard para visualizar.", icon="✅")
+if 'config' not in st.session_state:
+    st.session_state.config = get_default_config()
+else:
+    st.session_state.config = migrate_config(st.session_state.config)
 
-# --------------------------------------------------------------------------------------
-# Pré-cálculo das três estratégias (usado nas páginas seguintes)
-# --------------------------------------------------------------------------------------
-if page in ("Dashboard", "Relatórios e Dados"):
-    cfg = st.session_state.cfg
-    df_buy = simulate("Comprar", **cfg)
-    df_rent = simulate("Alugar", **cfg)
-    df_alt = simulate("Intercalar", **cfg)
-    
-    final_buy = df_buy.iloc[-1]
-    final_rent = df_rent.iloc[-1]
-    final_alt = df_alt.iloc[-1]
+if 'simulation_df' not in st.session_state:
+    st.session_state.simulation_df = pd.DataFrame()
+if 'active_page' not in st.session_state:
+    st.session_state.active_page = 'Configurações'
 
-    finals = {"Comprar": final_buy["Patrimônio_Líquido"], "Alugar": final_rent["Patrimônio_Líquido"], "Intercalar": final_alt["Patrimônio_Líquido"]}
-    best_strategy = max(finals, key=finals.get)
-
-# --------------------------------------------------------------------------------------
-# Página: Dashboard
-# --------------------------------------------------------------------------------------
-if page == "Dashboard":
-    st.subheader("Escolha a estratégia de investimento e visualize os resultados")
-    
-    sel = st.radio("Estratégia", ["Comprar", "Alugar", "Intercalar"], horizontal=True, key="dash_strategy_radio")
-    st.session_state.selected_strategy = sel
-    
-    df_map = {"Comprar": df_buy, "Alugar": df_rent, "Intercalar": df_alt}
-    df_sel = df_map[sel]
-    final_sel = df_sel.iloc[-1]
-
-    st.markdown("---")
-    st.subheader("Indicadores Principais")
-    kc1, kc2, kc3, kc4, kc5, kc6, kc7 = st.columns(7)
-    with kc1: render_kpi_soft("Invest. Inicial", fmt_brl(cfg["investimento_inicial"]), "var(--orange)")
-    with kc2: render_kpi_soft("Patrimônio Final", fmt_brl(final_sel["Patrimônio_Líquido"]), "var(--green)")
-    with kc3: render_kpi_soft("Receitas Acum.", fmt_brl(final_sel["Receitas_Acumuladas"]), "var(--brand-500)")
-    with kc4: render_kpi_soft("Gastos Acum.", fmt_brl(final_sel["Gastos_Acumulados"]), "var(--red)")
-    with kc5: render_kpi_soft("Caixa Final", fmt_brl(final_sel["Caixa_Final"]), "var(--teal)")
-    with kc6: render_kpi_soft("Melhor Estratégia", best_strategy, "var(--brand-700)")
-    with kc7: render_kpi_soft("Patrimônio (Melhor)", fmt_brl(finals[best_strategy]), "var(--brand-900)")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    gc1, gc2, gc3 = st.columns(3)
-    with gc1:
-        df_comp = pd.concat([df_buy, df_rent, df_alt])
-        fig1 = px.line(df_comp, x="Mês", y="Patrimônio_Líquido", color="Estratégia", color_discrete_map={"Comprar": "var(--brand-500)", "Alugar": "var(--green)", "Intercalar": "var(--orange)"})
-        light_layout(fig1, "Comparativo de Patrimônio Líquido")
-        st.plotly_chart(fig1, use_container_width=True)
-    with gc2:
-        fig2 = px.area(df_sel, x="Mês", y="Módulos_Ativos", color_discrete_sequence=["var(--brand-100)"])
-        fig2.update_traces(line=dict(color="var(--brand-500)"))
-        light_layout(fig2, f"Módulos Ativos — {sel}")
-        st.plotly_chart(fig2, use_container_width=True)
-    with gc3:
-        values = [float(final_sel["Receitas_Acumuladas"]), float(final_sel["Gastos_Acumulados"]), max(0.0, float(final_sel["Caixa_Final"]))]
-        fig3 = go.Figure(data=[go.Pie(labels=["Receitas", "Gastos", "Caixa Final"], values=values, hole=0.4, marker=dict(colors=["var(--brand-500)", "var(--red)", "var(--teal)"]))])
-        light_layout(fig3, "Composição Acumulada")
-        st.plotly_chart(fig3, use_container_width=True)
-
-# --------------------------------------------------------------------------------------
-# Página: Relatórios e Dados
-# --------------------------------------------------------------------------------------
-if page == "Relatórios e Dados":
-    st.subheader("Relatórios e Dados")
-    
-    estrategia_tbl = st.selectbox(
-        "Escolha a estratégia para análise detalhada",
-        options=["Comprar", "Alugar", "Intercalar"],
-        index=["Comprar", "Alugar", "Intercalar"].index(st.session_state.selected_strategy),
-        key="relat_strategy_select"
+# ---------------------------
+# BARRA DE NAVEGAÇÃO LATERAL
+# ---------------------------
+with st.sidebar:
+    st.markdown("<h1>Simulador Modular</h1>", unsafe_allow_html=True)
+    st.markdown("<p>Projeção com reinvestimento</p>", unsafe_allow_html=True)
+    st.session_state.active_page = st.radio(
+        "Menu Principal",
+        ["Configurações", "Planilhas", "Dashboard"],
+        key="navigation_radio",
+        label_visibility="collapsed"
     )
-    df_map = {"Comprar": df_buy, "Alugar": df_rent, "Intercalar": df_alt}
-    df_base = df_map[estrategia_tbl].copy()
 
+# ---------------------------
+# RENDERIZAÇÃO DAS PÁGINAS
+# ---------------------------
+
+# PÁGINA DE CONFIGURAÇÕES
+if st.session_state.active_page == 'Configurações':
+    st.title("Configurações de Investimento")
+    st.markdown("<p class='subhead'>Configure os parâmetros da simulação financeira</p>", unsafe_allow_html=True)
+
+    if st.button("🔄 Reset"):
+        st.session_state.config = get_default_config()
+        st.rerun()
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Investimento com Terreno Alugado")
+    c1, c2 = st.columns(2)
+    cfg_r = st.session_state.config['rented']
+    cfg_r['modules_init'] = c1.number_input("Módulos iniciais (alugados)", 0, value=cfg_r['modules_init'], key="rent_mod_init")
+    cfg_r['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_r['cost_per_module'], format="%.2f", key="rent_cost_mod")
+    cfg_r['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_r['revenue_per_module'], format="%.2f", key="rent_rev_mod")
+    cfg_r['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_r['maintenance_per_module'], format="%.2f", key="rent_maint_mod")
+    cfg_r['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_r['cost_correction_rate'], format="%.1f", key="rent_corr_rate")
+    cfg_r['rent_value'] = c2.number_input("Aluguel mensal fixo (R$)", 0.0, value=cfg_r['rent_value'], format="%.2f", key="rent_base_rent")
+    cfg_r['rent_per_new_module'] = c1.number_input("Custo de aluguel por novo módulo (R$)", 0.0, value=cfg_r['rent_per_new_module'], format="%.2f", key="rent_new_rent")
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Investimento com Terreno Comprado")
+    c1, c2 = st.columns(2)
+    cfg_o = st.session_state.config['owned']
+    cfg_o['modules_init'] = c1.number_input("Módulos iniciais (próprios)", 0, value=cfg_o['modules_init'], key="own_mod_init")
+    cfg_o['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_o['cost_per_module'], format="%.2f", key="own_cost_mod")
+    cfg_o['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_o['revenue_per_module'], format="%.2f", key="own_rev_mod")
+    cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
+    cfg_o['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_o['cost_correction_rate'], format="%.1f", key="own_corr_rate")
+    # Campo RENOMEADO
+    cfg_o['monthly_land_plot_parcel'] = c2.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=cfg_o.get('monthly_land_plot_parcel', 0.0), format="%.2f", key="own_land_parcel")
     st.markdown("---")
-    
-    # --- ANÁLISE POR PONTO NO TEMPO (RESTAURADA) ---
-    st.markdown("<h4 class='report-title'>Análise por Ponto no Tempo</h4>", unsafe_allow_html=True)
-    ac1, ac2 = st.columns([1, 2])
-    with ac1:
-        st.markdown("<h5 class='report-muted'>Selecione o Período</h5>", unsafe_allow_html=True)
-        anos_disponiveis = df_base['Ano'].unique()
-        selected_year = st.selectbox("Ano", options=anos_disponiveis, key="relat_year_select")
-        
-        months_in_year = df_base[df_base['Ano'] == selected_year]['Mês'].apply(lambda x: ((x - 1) % 12) + 1).unique()
-        selected_month_label = st.selectbox("Mês", options=sorted(months_in_year), key="relat_month_select")
-        
-        data_point_df = df_base[(df_base['Ano'] == selected_year) & (((df_base['Mês'] - 1) % 12) + 1 == selected_month_label)]
-        if not data_point_df.empty:
-            data_point = data_point_df.iloc[0]
-            st.markdown("<br>", unsafe_allow_html=True)
-            render_kpi_soft("Patrimônio no Mês", fmt_brl(data_point["Patrimônio_Líquido"]), "var(--green)")
-            st.markdown("<br>", unsafe_allow_html=True)
-            render_kpi_soft("Caixa Final do Mês", fmt_brl(data_point["Caixa_Final"]), "var(--teal)")
-    with ac2:
-        if not data_point_df.empty:
-            st.markdown(f"<h5 class='report-muted'>Fluxo de Caixa do Mês {data_point['Mês']}</h5>", unsafe_allow_html=True)
-            chart_data = pd.DataFrame({"Categoria": ["Receita", "Gastos"],"Valor": [data_point['Receita'], data_point['Gastos']]})
-            fig_monthly = px.bar(chart_data, x="Categoria", y="Valor", text_auto='.2s', color="Categoria", color_discrete_map={"Receita": "var(--green)", "Gastos": "var(--red)"})
-            light_layout(fig_monthly, f"Receita vs. Gasto (Mês {data_point['Mês']})").update_layout(showlegend=False)
-            st.plotly_chart(fig_monthly, use_container_width=True)
+    st.markdown("###### Financiamento do Terreno Inicial (Opcional)")
+    cfg_o['land_total_value'] = st.number_input("Valor total do terreno inicial (R$)", 0.0, value=cfg_o['land_total_value'], format="%.2f", key="own_total_land_val")
+    if cfg_o['land_total_value'] > 0:
+        c1_fin, c2_fin = st.columns(2)
+        cfg_o['land_down_payment_pct'] = c1_fin.number_input("Entrada (%)", 0.0, 100.0, value=cfg_o['land_down_payment_pct'], format="%.1f", key="own_down_pay")
+        cfg_o['land_installments'] = c1_fin.number_input("Quantidade de parcelas", 1, 480, value=cfg_o['land_installments'], key="own_install")
+        valor_entrada = cfg_o['land_total_value'] * (cfg_o['land_down_payment_pct'] / 100.0)
+        valor_financiado = cfg_o['land_total_value'] - valor_entrada
+        valor_parcela = valor_financiado / cfg_o['land_installments'] if cfg_o['land_installments'] > 0 else 0
+        c2_fin.metric("Valor da Entrada", fmt_brl(valor_entrada))
+        c2_fin.metric("Valor da Parcela", fmt_brl(valor_parcela))
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.subheader("Parâmetros Globais e Eventos Financeiros")
+    cfg_g = st.session_state.config['global']
+    c1, c2 = st.columns(2)
+    cfg_g['years'] = c1.number_input("Horizonte de investimento (anos)", 1, 50, cfg_g['years'])
+    cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em % do lucro.")
     st.markdown("---")
-    
-    st.markdown("<h4 class='report-title'>Tabela Completa da Simulação</h4>", unsafe_allow_html=True)
-    all_columns = df_base.columns.tolist()
-    default_cols = ["Mês","Ano","Módulos_Ativos","Receita","Gastos","Caixa_Final","Patrimônio_Líquido"]
+    st.markdown("###### Eventos Financeiros (% sobre o lucro mensal)")
+    # (Lógica de eventos permanece a mesma)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    state_key = f"column_visibility_{slug(estrategia_tbl)}"
-    if (state_key not in st.session_state) or set(st.session_state[state_key].keys()) != set(all_columns):
-        st.session_state[state_key] = {c: (c in default_cols) for c in all_columns}
-    
-    with st.expander("Exibir/Ocultar Colunas"):
-        vis_map = st.session_state[state_key]
-        grid_cols = st.columns(5)
-        for i, col_name in enumerate(all_columns):
-            with grid_cols[i % 5]:
-                new_on = st.toggle(col_name, value=vis_map.get(col_name, False), key=f"tg_{slug(estrategia_tbl)}_{slug(col_name)}")
-                if new_on != vis_map.get(col_name, False):
-                    vis_map[col_name] = new_on
-                    st.session_state[state_key] = vis_map
-                    st.rerun()
+# PÁGINA DO DASHBOARD
+if st.session_state.active_page == 'Dashboard':
+    st.title("Dashboard Estratégico")
+    st.markdown(f"<p class='subhead'>Escolha uma estratégia de reinvestimento para simular</p>", unsafe_allow_html=True)
 
-    cols_to_show = [c for c, v in st.session_state[state_key].items() if v]
-    if cols_to_show:
-        st.dataframe(df_base[cols_to_show], use_container_width=True, hide_index=True)
-        to_excel_download(df_base[cols_to_show], filename=f"relatorio_{slug(estrategia_tbl)}.xlsx")
+    with st.container(border=True):
+        strat_cols = st.columns(3)
+        if strat_cols[0].button("📈 Simular: Comprar Terreno", use_container_width=True):
+            with st.spinner("Calculando simulação..."):
+                st.session_state.simulation_df = simulate(st.session_state.config, 'buy')
+        if strat_cols[1].button("📈 Simular: Alugar Terreno", use_container_width=True):
+            with st.spinner("Calculando simulação..."):
+                st.session_state.simulation_df = simulate(st.session_state.config, 'rent')
+        if strat_cols[2].button("📈 Simular: Intercalar Compra/Aluguel", use_container_width=True, type="primary"):
+            with st.spinner("Calculando simulação..."):
+                st.session_state.simulation_df = simulate(st.session_state.config, 'alternate')
+
+    if st.session_state.simulation_df.empty:
+        st.info("👆 Escolha uma estratégia e clique em um dos botões acima para iniciar a simulação.")
     else:
-        st.warning("Selecione ao menos uma coluna para visualizar a tabela.", icon="⚠️")
+        df = st.session_state.simulation_df
+        final = df.iloc[-1]
 
-    st.markdown("---")
-    st.markdown("<h4 class='report-title'>Indicadores Resumo da Estratégia</h4>", unsafe_allow_html=True)
-    last = df_base.iloc[-1]
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: render_kpi_soft("Receitas Acumuladas", fmt_brl(last["Receitas_Acumuladas"]), "var(--brand-500)")
-    with k2: render_kpi_soft("Gastos Acumulados", fmt_brl(last["Gastos_Acumulados"]), "var(--red)")
-    with k3: render_kpi_soft("Investimento Total", fmt_brl(last["Investimento_Total"]), "var(--teal)")
-    with k4: render_kpi_soft("Patrimônio Líquido Final", fmt_brl(last["Patrimônio_Líquido"]), "var(--green)")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("KPIs Principais")
+        with st.container(border=True):
+            kpi_cols = st.columns(4)
+            cfg_r = st.session_state.config['rented']
+            cfg_o = st.session_state.config['owned']
+            investimento_inicial = (cfg_r['modules_init'] * cfg_r['cost_per_module']) + (cfg_o['modules_init'] * cfg_o['cost_per_module'])
+            if cfg_o['land_total_value'] > 0:
+                investimento_inicial += cfg_o['land_total_value'] * (cfg_o['land_down_payment_pct'] / 100.0)
+
+            kpi_cols[0].markdown(f"<div class='kpi-colored' style='background-color:{KPI_INVESTIMENTO_COLOR};'><div class='small-muted'>Investimento Inicial</div><div class='kpi-value'>{fmt_brl(investimento_inicial)}</div></div>", unsafe_allow_html=True)
+            kpi_cols[1].markdown(f"<div class='kpi-colored' style='background-color:{KPI_PATRIMONIO_COLOR};'><div class='small-muted'>Patrimônio Líquido</div><div class='kpi-value'>{fmt_brl(final['Patrimônio Líquido'])}</div></div>", unsafe_allow_html=True)
+            kpi_cols[2].markdown(f"<div class='kpi-colored' style='background-color:{CHART_RETIRADAS_COLOR};'><div class='small-muted'>Retiradas Acumuladas</div><div class='kpi-value'>{fmt_brl(final['Retiradas Acumuladas'])}</div></div>", unsafe_allow_html=True)
+            kpi_cols[3].markdown(f"<div class='kpi-colored' style='background-color:{CHART_FUNDO_COLOR};'><div class='small-muted'>Fundo Acumulado</div><div class='kpi-value'>{fmt_brl(final['Fundo Acumulado'])}</div></div>", unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            kpi_cols2 = st.columns(4)
+            kpi_cols2[0].markdown(f"<div class='kpi-gradient'><div class='small-muted'>Módulos Finais</div><div class='kpi-value'>{int(final['Módulos Ativos'])}</div></div>", unsafe_allow_html=True)
+            kpi_cols2[1].markdown(f"<div class='kpi-gradient'><div class='small-muted'>Caixa Final</div><div class='kpi-value'>{fmt_brl(final['Caixa (Final Mês)'])}</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("Análise Gráfica Detalhada")
+
+        # Patrimônio vs Investimento Total (mantido)
+        with st.container(border=True):
+            st.markdown("###### Evolução do Patrimônio vs. Investimento")
+            periodo_pat = st.slider("Período (meses)", 1, len(df), (1, len(df)), key="pat_slider")
+            df_pat = df.loc[periodo_pat[0]-1:periodo_pat[1]-1]
+            fig_pat = go.Figure()
+            fig_pat.add_trace(go.Scatter(x=df_pat["Mês"], y=df_pat["Patrimônio Líquido"], name="Patrimônio Líquido", line=dict(color=KPI_PATRIMONIO_COLOR, width=2.5)))
+            fig_pat.add_trace(go.Scatter(x=df_pat["Mês"], y=df_pat["Investimento Total Acumulado"], name="Investimento Total", line=dict(color=KPI_INVESTIMENTO_COLOR, width=1.5)))
+            fig_pat.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='white', paper_bgcolor='white')
+            st.plotly_chart(fig_pat, use_container_width=True)
+
+        chart_cols = st.columns(2)
+        with chart_cols[0]:
+            with st.container(border=True):
+                st.markdown("###### Composição dos Módulos")
+                periodo_comp = st.slider("Período (meses)", 1, len(df), (1, len(df)), key="comp_slider")
+                df_comp = df.loc[periodo_comp[0]-1:periodo_comp[1]-1]
+                fig_comp = go.Figure()
+                fig_comp.add_trace(go.Scatter(x=df_comp['Mês'], y=df_comp['Módulos Próprios'], name='Próprios', stackgroup='one', line=dict(color=CHART_MODULOS_PROPRIOS_COLOR)))
+                fig_comp.add_trace(go.Scatter(x=df_comp['Mês'], y=df_comp['Módulos Alugados'], name='Alugados', stackgroup='one', line=dict(color=CHART_MODULOS_ALUGADOS_COLOR)))
+                fig_comp.update_layout(height=400, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor='white', paper_bgcolor='white')
+                st.plotly_chart(fig_comp, use_container_width=True)
+        with chart_cols[1]:
+            with st.container(border=True):
+                st.markdown("###### Distribuição Final dos Recursos")
+                dist_data = {
+                    'Valores': [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']],
+                    'Categorias': ['Retiradas', 'Fundo Total', 'Caixa Final']
+                }
+                fig_pie = px.pie(dist_data, values='Valores', names='Categorias', color_discrete_sequence=[CHART_RETIRADAS_COLOR, CHART_FUNDO_COLOR, CHART_CAIXA_COLOR])
+                fig_pie.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.1), paper_bgcolor='white')
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+        # NOVOS: Gráficos individuais de KPIs (Retiradas, Fundo, Caixa)
+        with st.container(border=True):
+            st.markdown("###### Gráficos Individuais (KPIs)")
+            periodo_kpi = st.slider("Período (meses) - KPIs", 1, len(df), (1, len(df)), key="kpi_slider")
+            df_kpi = df.loc[periodo_kpi[0]-1:periodo_kpi[1]-1]
+            kpi_cols_charts = st.columns(3)
+
+            with kpi_cols_charts[0]:
+                fig_ret = go.Figure()
+                fig_ret.add_trace(go.Scatter(x=df_kpi["Mês"], y=df_kpi["Retiradas Acumuladas"], name="Retiradas Acumuladas", line=dict(color=CHART_RETIRADAS_COLOR, width=2)))
+                fig_ret.update_layout(title="Retiradas Acumuladas", height=300, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor='white', plot_bgcolor='white')
+                st.plotly_chart(fig_ret, use_container_width=True)
+
+            with kpi_cols_charts[1]:
+                fig_fundo = go.Figure()
+                fig_fundo.add_trace(go.Scatter(x=df_kpi["Mês"], y=df_kpi["Fundo Acumulado"], name="Fundo Acumulado", line=dict(color=CHART_FUNDO_COLOR, width=2)))
+                fig_fundo.update_layout(title="Fundo Acumulado", height=300, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor='white', plot_bgcolor='white')
+                st.plotly_chart(fig_fundo, use_container_width=True)
+
+            with kpi_cols_charts[2]:
+                fig_caixa = go.Figure()
+                fig_caixa.add_trace(go.Scatter(x=df_kpi["Mês"], y=df_kpi["Caixa (Final Mês)"], name="Caixa Mensal", line=dict(color=CHART_CAIXA_COLOR, width=2)))
+                fig_caixa.update_layout(title="Caixa Mensal", height=300, margin=dict(l=10,r=10,t=40,b=10), paper_bgcolor='white', plot_bgcolor='white')
+                st.plotly_chart(fig_caixa, use_container_width=True)
+
+# PÁGINA DE PLANILHAS
+if st.session_state.active_page == 'Planilhas':
+    st.title("Planilhas Demonstrativas")
+    st.markdown("<p class='subhead'>Relatórios detalhados e análise de dados da simulação</p>", unsafe_allow_html=True)
+
+    if st.session_state.simulation_df.empty:
+        st.info("👈 Vá para a página de 'Configurações' e depois no 'Dashboard' para iniciar uma simulação.")
+    else:
+        df = st.session_state.simulation_df
+
+        with st.container(border=True):
+            st.subheader("Análise por Ponto no Tempo")
+            c1, c2 = st.columns(2)
+            anos_disponiveis = df['Ano'].unique()
+            selected_year = c1.selectbox("Selecione o ano", options=anos_disponiveis)
+            months_in_year = df[df['Ano'] == selected_year]['Mês'].unique()
+            month_labels = [((m-1)%12)+1 for m in months_in_year]
+            selected_month_label = c2.selectbox("Selecione o mês", options=month_labels)
+            selected_month_abs = df[(df['Ano'] == selected_year) & (((df['Mês']-1)%12)+1 == selected_month_label)]['Mês'].iloc[0]
+            data_point = df[df["Mês"] == selected_month_abs].iloc[0]
+
+            st.markdown("---")
+            res_cols = st.columns(2)
+            res_cols[0].metric("Total de Módulos", f"{int(data_point['Módulos Ativos'])} ({int(data_point['Módulos Alugados'])} Alug. / {int(data_point['Módulos Próprios'])} Próp.)")
+            res_cols[0].metric("Caixa no Mês", fmt_brl(data_point['Caixa (Final Mês)']))
+            res_cols[1].metric("Patrimônio Líquido", fmt_brl(data_point['Patrimônio Líquido']))
+            res_cols[1].metric("Investimento Total", fmt_brl(data_point['Investimento Total Acumulado']))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        with st.container(border=True):
+            st.subheader("Tabela Completa da Simulação")
+            page_size = 20
+            total_pages = (len(df) - 1) // page_size + 1
+            if 'page' not in st.session_state:
+                st.session_state.page = 0
+            start_idx = st.session_state.page * page_size
+            end_idx = start_idx + page_size
+
+            df_display = df.iloc[start_idx:end_idx].copy()
+            format_cols = ["Receita", "Manutenção", "Aluguel", "Parcelas Terrenos (Novos)", "Aporte", "Fundo (Mês)", "Retirada (Mês)", "Caixa (Final Mês)", "Investimento Total Acumulado", "Fundo Acumulado", "Retiradas Acumuladas", "Patrimônio Líquido"]
+            for col in format_cols:
+                if col in df_display.columns:
+                    df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
+
+            st.dataframe(
+                df_display[['Mês', 'Ano', 'Módulos Ativos', 'Módulos Alugados', 'Módulos Próprios', 'Receita', 'Gastos', 'Aluguel', 'Parcelas Terrenos (Novos)', 'Caixa (Final Mês)', 'Investimento Total Acumulado', 'Patrimônio Líquido']],
+                use_container_width=True,
+                hide_index=True
+            )
+
+            page_cols = st.columns([1, 1, 8])
+            if page_cols[0].button("Anterior", disabled=(st.session_state.page == 0)):
+                st.session_state.page -= 1
+                st.rerun()
+            if page_cols[1].button("Próxima", disabled=(st.session_state.page >= total_pages - 1)):
+                st.session_state.page += 1
+                st.rerun()
+            page_cols[2].markdown(f"<div style='padding-top:10px'>Página {st.session_state.page + 1} de {total_pages}</div>", unsafe_allow_html=True)
+
+        excel_bytes = df_to_excel_bytes(df)
+        st.download_button(
+            "📥 Baixar Relatório (Excel)",
+            data=excel_bytes,
+            file_name=f"simulacao_modulos_{st.session_state.config['global']['years']}_anos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
