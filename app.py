@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v6 com Tema Azul Corporativo
+# Simulador Modular — v7 com Layout Moderno Inspirado na Imagem
 
 import streamlit as st
 import pandas as pd
@@ -9,19 +9,21 @@ import plotly.express as px
 from io import BytesIO
 import re
 
-# --- PALETA DE CORES E CONFIGURAÇÕES (TEMA AZUL) ---
+# --- PALETA DE CORES E CONFIGURAÇÕES (TEMA MODERNO) ---
 PRIMARY_COLOR = "#2563EB"
-SUCCESS_COLOR = "#16A34A"
-DANGER_COLOR  = "#DC2626"
-WARNING_COLOR = "#D97706"
-INFO_COLOR    = "#0E7490"
-DARK_BACKGROUND  = "#0B1221"
-LIGHT_BACKGROUND = "#F3F6FB"
-# ATUALIZADO: Cor principal do texto agora é um azul corporativo escuro
-TEXT_COLOR       = "#1E3A8A"
+SECONDARY_COLOR = "#0EA5E9"
+SUCCESS_COLOR = "#10B981"
+DANGER_COLOR  = "#EF4444"
+WARNING_COLOR = "#F59E0B"
+INFO_COLOR    = "#8B5CF6"
+DARK_BACKGROUND  = "#0F172A"
+LIGHT_BACKGROUND = "#F8FAFC"
+TEXT_COLOR       = "#1E293B"
 CARD_COLOR       = "#FFFFFF"
-MUTED_TEXT_COLOR = "#475569"
+MUTED_TEXT_COLOR = "#64748B"
+ACCENT_COLOR     = "#6366F1"
 TABLE_BORDER_COLOR = "#E2E8F0"
+CHART_GRID_COLOR = "#F1F5F9"
 
 # --- DEFINIÇÃO DE COLUNAS PARA FORMATAÇÃO ---
 MONEY_COLS = {
@@ -46,7 +48,7 @@ def _luminance(rgb):
     return 0.2126*r + 0.7152*g + 0.0722*b
 
 def ideal_text_color(bg_hex: str) -> str:
-    """Força o uso da cor de texto corporativa (azul escuro) em todos os casos."""
+    """Força o uso da cor de texto corporativa em todos os casos."""
     return TEXT_COLOR
 
 def fmt_brl(v):
@@ -60,13 +62,38 @@ def fmt_brl(v):
     except Exception:
         return "R$ 0,00"
 
-def render_kpi_card(title, value, bg_color):
-    """Renderiza um cartão de KPI com cor de texto fixa (azul corporativo)."""
+def render_kpi_card(title, value, bg_color, icon=None, subtitle=None):
+    """Renderiza um cartão de KPI com design moderno."""
     text_color = ideal_text_color(bg_color)
+    icon_html = f"<div style='font-size: 2rem; margin-bottom: 0.5rem;'>{icon}</div>" if icon else ""
+    subtitle_html = f"<div class='kpi-card-subtitle'>{subtitle}</div>" if subtitle else ""
+    
     st.markdown(f"""
-        <div class="kpi-card" style="background-color:{bg_color}; color:{text_color};">
-            <div class="kpi-card-title">{title}</div>
-            <div class="kpi-card-value">{value}</div>
+        <div class="kpi-card-modern" style="background-color:{bg_color}; color:{text_color};">
+            {icon_html}
+            <div class="kpi-card-value-modern">{value}</div>
+            <div class="kpi-card-title-modern">{title}</div>
+            {subtitle_html}
+        </div>
+    """, unsafe_allow_html=True)
+
+def render_stat_card(title, value, change=None, change_label=None):
+    """Renderiza um cartão de estatística com design limpo."""
+    change_html = ""
+    if change is not None:
+        change_color = SUCCESS_COLOR if change >= 0 else DANGER_COLOR
+        change_icon = "↗️" if change >= 0 else "↘️"
+        change_html = f"""
+            <div class="stat-change" style="color: {change_color};">
+                {change_icon} {change}% {change_label or ''}
+            </div>
+        """
+    
+    st.markdown(f"""
+        <div class="stat-card">
+            <div class="stat-value">{value}</div>
+            <div class="stat-title">{title}</div>
+            {change_html}
         </div>
     """, unsafe_allow_html=True)
 
@@ -89,78 +116,221 @@ def slug(s: str) -> str:
     return s[:60]
 
 def apply_plot_theme(fig, title=None, h=420):
-    """Aplica um tema visual consistente aos gráficos Plotly."""
+    """Aplica um tema visual moderno aos gráficos Plotly."""
     fig.update_layout(
-        title=title or fig.layout.title.text,
+        title=dict(
+            text=title or fig.layout.title.text,
+            x=0.5,
+            xanchor='center',
+            font=dict(size=16, color=TEXT_COLOR, family="Arial, sans-serif")
+        ),
         height=h,
-        margin=dict(l=10, r=10, t=40, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR,
-        font=dict(color=TEXT_COLOR, size=13),
-        xaxis=dict(gridcolor="#E5E7EB"), yaxis=dict(gridcolor="#E5E7EB")
+        margin=dict(l=10, r=10, t=60, b=10),
+        legend=dict(
+            orientation="h", 
+            yanchor="bottom", 
+            y=1.02, 
+            xanchor="right", 
+            x=1,
+            bgcolor='rgba(255,255,255,0.8)',
+            bordercolor=TABLE_BORDER_COLOR,
+            borderwidth=1
+        ),
+        plot_bgcolor=CARD_COLOR, 
+        paper_bgcolor=CARD_COLOR,
+        font=dict(color=TEXT_COLOR, size=13, family="Arial, sans-serif"),
+        xaxis=dict(
+            gridcolor=CHART_GRID_COLOR,
+            linecolor=TABLE_BORDER_COLOR,
+            linewidth=1
+        ), 
+        yaxis=dict(
+            gridcolor=CHART_GRID_COLOR,
+            linecolor=TABLE_BORDER_COLOR,
+            linewidth=1
+        )
     )
     return fig
 
 # ---------------------------
-# CSS - Estilos da Página
+# CSS - Estilos da Página Moderna
 # ---------------------------
 st.set_page_config(page_title="Simulador Modular", layout="wide", initial_sidebar_state="expanded")
 st.markdown(f"""
     <style>
-        .main .block-container {{ padding: 1.5rem 2rem; }}
-        .stApp {{ background-color: {LIGHT_BACKGROUND}; }}
-        [data-testid="stSidebar"] {{ background-color: #111827; }}
-        /* Cor de texto na sidebar mantida como clara para contraste com fundo escuro */
-        [data-testid="stSidebar"] * {{ color: #E5E7EB; }}
-        [data-testid="stSidebar"] h1 {{ color: {TEXT_COLOR}; }}
+        .main .block-container {{ 
+            padding: 1.5rem 2rem; 
+            max-width: 100%;
+        }}
+        .stApp {{ 
+            background: linear-gradient(135deg, {LIGHT_BACKGROUND} 0%, #FFFFFF 100%);
+        }}
         
-        /* Cor principal do texto da aplicação agora usa TEXT_COLOR (azul escuro) */
-        h1, h2, h3, h4, h5, h6, label, p, span {{ color: {TEXT_COLOR}; }}
-        .subhead {{ color: {MUTED_TEXT_COLOR}; }}
+        /* Sidebar moderna */
+        [data-testid="stSidebar"] {{ 
+            background: {DARK_BACKGROUND};
+            border-right: 1px solid {TABLE_BORDER_COLOR};
+        }}
+        [data-testid="stSidebar"] * {{ 
+            color: #E5E7EB; 
+        }}
+        [data-testid="stSidebar"] h1 {{ 
+            color: #FFFFFF; 
+            font-weight: 700;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }}
         
+        /* Cores de texto */
+        h1, h2, h3, h4, h5, h6 {{ 
+            color: {TEXT_COLOR}; 
+            font-weight: 600;
+        }}
+        .subhead {{ 
+            color: {MUTED_TEXT_COLOR}; 
+            font-size: 1.1rem;
+        }}
+        
+        /* Botões modernos */
         .stButton > button {{
-            border-radius: 8px;
-            border: 1px solid {PRIMARY_COLOR};
+            border-radius: 12px;
+            border: 2px solid {PRIMARY_COLOR};
             background-color: {PRIMARY_COLOR};
-            color: {TEXT_COLOR}; padding: 10px 16px; font-weight: 600;
+            color: white; 
+            padding: 12px 24px; 
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1);
         }}
         .stButton > button:hover {{
-            background-color: #1E40AF; border-color: #1E40AF;
+            background-color: #1E40AF; 
+            border-color: #1E40AF;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(37, 99, 235, 0.15);
         }}
         .stButton > button[kind="secondary"] {{
-            background-color: transparent; color: {PRIMARY_COLOR}; border: 1px solid {PRIMARY_COLOR};
+            background-color: transparent; 
+            color: {PRIMARY_COLOR}; 
+            border: 2px solid {PRIMARY_COLOR};
         }}
         .stButton > button[kind="secondary"]:hover {{
             background-color: rgba(37, 99, 235, .08);
+            transform: translateY(-2px);
         }}
-        /* Cards */
+        
+        /* Cards modernos */
         .card {{
             background: {CARD_COLOR};
-            border-radius: 10px; padding: 1.25rem;
+            border-radius: 16px; 
+            padding: 1.5rem;
             border: 1px solid {TABLE_BORDER_COLOR};
-            box-shadow: 0 4px 10px rgba(0,0,0,.06);
+            box-shadow: 0 4px 20px rgba(0,0,0,.08);
+            backdrop-filter: blur(10px);
         }}
-        .kpi-card {{
-            border-radius: 12px; padding: 1rem 1.25rem;
-            box-shadow: 0 6px 14px rgba(0,0,0,.10); height: 100%;
+        
+        /* KPI Cards - Design moderno inspirado na imagem */
+        .kpi-card-modern {{
+            border-radius: 20px; 
+            padding: 2rem 1.5rem;
+            box-shadow: 0 8px 25px rgba(0,0,0,.12); 
+            height: 100%;
+            text-align: center;
+            transition: transform 0.3s ease;
+            background: linear-gradient(135deg, {PRIMARY_COLOR}15 0%, {SECONDARY_COLOR}15 100%);
+            border: 1px solid {TABLE_BORDER_COLOR};
         }}
-        .kpi-card-title {{ font-size: .95rem; font-weight: 600; opacity: .92; }}
-        .kpi-card-value {{ font-size: 1.9rem; font-weight: 800; }}
-        /* Dataframe: borda leve e cabeçalho destacado */
+        .kpi-card-modern:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0,0,0,.15);
+        }}
+        .kpi-card-title-modern {{ 
+            font-size: 1rem; 
+            font-weight: 600; 
+            opacity: .85;
+            margin-top: 0.5rem;
+        }}
+        .kpi-card-value-modern {{ 
+            font-size: 2.5rem; 
+            font-weight: 800; 
+            line-height: 1.1;
+        }}
+        .kpi-card-subtitle {{
+            font-size: 0.85rem;
+            opacity: .7;
+            margin-top: 0.5rem;
+        }}
+        
+        /* Stat Cards */
+        .stat-card {{
+            background: {CARD_COLOR};
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid {TABLE_BORDER_COLOR};
+            text-align: center;
+        }}
+        .stat-value {{
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: {TEXT_COLOR};
+            margin-bottom: 0.25rem;
+        }}
+        .stat-title {{
+            font-size: 0.9rem;
+            color: {MUTED_TEXT_COLOR};
+            font-weight: 500;
+        }}
+        .stat-change {{
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }}
+        
+        /* Dataframe moderno */
         [data-testid="stDataFrame"] div[data-testid="StyledTable"] {{
             border: 1px solid {TABLE_BORDER_COLOR};
-            border-radius: 8px;
+            border-radius: 12px;
+            overflow: hidden;
         }}
         [data-testid="stDataFrame"] th {{
-            background: #F8FAFC !important; color: {TEXT_COLOR} !important; font-weight: 700 !important;
+            background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%) !important; 
+            color: {TEXT_COLOR} !important; 
+            font-weight: 700 !important;
             border-bottom: 1px solid {TABLE_BORDER_COLOR} !important;
+            padding: 12px 16px !important;
+        }}
+        [data-testid="stDataFrame"] td {{
+            padding: 10px 16px !important;
+            border-bottom: 1px solid {TABLE_BORDER_COLOR} !important;
+        }}
+        
+        /* Tabs e containers */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 8px;
+        }}
+        .stTabs [data-baseweb="tab"] {{
+            border-radius: 12px 12px 0 0;
+            padding: 12px 24px;
+            background-color: {LIGHT_BACKGROUND};
+        }}
+        .stTabs [aria-selected="true"] {{
+            background-color: {PRIMARY_COLOR} !important;
+            color: white !important;
+        }}
+        
+        /* Headers com gradiente */
+        .gradient-header {{
+            background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
         }}
     </style>
 """, unsafe_allow_html=True)
 
 
 # ---------------------------
-# Motor de Simulação
+# Motor de Simulação (MANTIDO)
 # ---------------------------
 @st.cache_data
 def simulate(_config, reinvestment_strategy):
@@ -320,27 +490,45 @@ if 'active_page' not in st.session_state: st.session_state.active_page = 'Dashbo
 
 
 # ---------------------------
-# BARRA DE NAVEGAÇÃO LATERAL
+# BARRA DE NAVEGAÇÃO LATERAL MODERNA
 # ---------------------------
 with st.sidebar:
-    st.markdown("<h1>Simulador Modular</h1>", unsafe_allow_html=True)
-    st.markdown("<p>Projeção com reinvestimento</p>", unsafe_allow_html=True)
-    st.session_state.active_page = st.radio(
-        "Menu Principal", ["Dashboard", "Relatórios e Dados", "Configurações"],
-        key="navigation_radio", label_visibility="collapsed"
+    st.markdown("<h1>📊 Simulador Modular</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #94A3B8; margin-bottom: 2rem;'>Projeção com reinvestimento inteligente</p>", unsafe_allow_html=True)
+    
+    # Navegação com ícones
+    nav_options = {
+        "Dashboard": "📈",
+        "Relatórios e Dados": "📋", 
+        "Configurações": "⚙️"
+    }
+    
+    selected = st.radio(
+        "Menu Principal", 
+        list(nav_options.keys()),
+        key="navigation_radio", 
+        label_visibility="collapsed",
+        format_func=lambda x: f"{nav_options[x]} {x}"
     )
+    st.session_state.active_page = selected
+    
+    st.markdown("---")
+    st.markdown("<p style='color: #64748B; font-size: 0.85rem;'>Desenvolvido com Streamlit</p>", unsafe_allow_html=True)
+
 
 # ---------------------------
-# PÁGINA DE CONFIGURAÇÕES
+# PÁGINA DE CONFIGURAÇÕES (MANTIDA)
 # ---------------------------
 if st.session_state.active_page == 'Configurações':
-    st.title("Configurações de Investimento")
+    st.markdown("<h1 class='gradient-header'>Configurações de Investimento</h1>", unsafe_allow_html=True)
     st.markdown("<p class='subhead'>Ajuste os parâmetros da simulação financeira e adicione eventos.</p>", unsafe_allow_html=True)
+    
     if st.button("🔄 Resetar Configurações", type="secondary"):
         st.session_state.config = get_default_config()
         st.rerun()
+        
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("Investimento com Terreno Alugado")
+    st.subheader("🏢 Investimento com Terreno Alugado")
     c1, c2 = st.columns(2)
     cfg_r = st.session_state.config['rented']
     cfg_r['modules_init'] = c1.number_input("Módulos iniciais (alugados)", 0, value=cfg_r['modules_init'], key="rent_mod_init")
@@ -356,8 +544,9 @@ if st.session_state.active_page == 'Configurações':
         help="Preenchido automaticamente (Manutenção + Aluguel Fixo)."
     )
     st.markdown('</div><br>', unsafe_allow_html=True)
+    
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("Investimento com Terreno Próprio")
+    st.subheader("🏠 Investimento com Terreno Próprio")
     cfg_o = st.session_state.config['owned']
     st.markdown("###### Financiamento do Terreno Inicial (Opcional)")
     cfg_o['land_total_value'] = st.number_input("Valor total do terreno inicial (R$)", 0.0, value=cfg_o['land_total_value'], format="%.2f", key="own_total_land_val")
@@ -394,8 +583,9 @@ if st.session_state.active_page == 'Configurações':
         help="Preenchido automaticamente (Parcela do Terreno + Manutenção)."
     )
     st.markdown('</div><br>', unsafe_allow_html=True)
+    
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("Parâmetros Globais")
+    st.subheader("🌐 Parâmetros Globais")
     cfg_g = st.session_state.config['global']
     c1, c2 = st.columns(2)
     cfg_g['years'] = c1.number_input("Horizonte de investimento (anos)", 1, 50, value=cfg_g['years'])
@@ -407,8 +597,9 @@ if st.session_state.active_page == 'Configurações':
     )
     cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em % do lucro.")
     st.markdown('</div><br>', unsafe_allow_html=True)
+    
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("Eventos Financeiros")
+    st.subheader("📅 Eventos Financeiros")
     st.markdown("<h6>Aportes (investimentos pontuais)</h6>", unsafe_allow_html=True)
     for i, aporte in enumerate(st.session_state.config['global']['aportes']):
         cols = st.columns([2, 3, 1])
@@ -448,59 +639,80 @@ if st.session_state.active_page == 'Configurações':
 
 
 # ---------------------------
-# PÁGINA DO DASHBOARD
+# PÁGINA DO DASHBOARD MODERNA
 # ---------------------------
 if st.session_state.active_page == 'Dashboard':
-    st.title("Dashboard Estratégico")
-    st.markdown("<p class='subhead'>Simule uma estratégia de reinvestimento ou compare todas.</p>", unsafe_allow_html=True)
+    st.markdown("<h1 class='gradient-header'>Dashboard Estratégico</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='subhead'>Simule uma estratégia de reinvestimento ou compare todas as abordagens</p>", unsafe_allow_html=True)
 
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### 🎯 Estratégias de Reinvestimento")
         strat_cols = st.columns(3)
-        if strat_cols[0].button("📈 Simular: Comprar Novos", use_container_width=True, type="secondary"):
-            with st.spinner("Calculando simulação..."):
+        
+        if strat_cols[0].button("**🏠 Comprar Novos**\n\nAquisição de terrenos próprios", use_container_width=True, type="secondary"):
+            with st.spinner("Calculando simulação de compra..."):
                 st.session_state.simulation_df = simulate(st.session_state.config, 'buy')
                 st.session_state.comparison_df = pd.DataFrame()
-        if strat_cols[1].button("📈 Simular: Alugar Novos", use_container_width=True, type="secondary"):
-            with st.spinner("Calculando simulação..."):
+                
+        if strat_cols[1].button("**🏢 Alugar Novos**\n\nExpansão com aluguel de terrenos", use_container_width=True, type="secondary"):
+            with st.spinner("Calculando simulação de aluguel..."):
                 st.session_state.simulation_df = simulate(st.session_state.config, 'rent')
                 st.session_state.comparison_df = pd.DataFrame()
-        if strat_cols[2].button("📈 Simular: Intercalar Novos", use_container_width=True, type="secondary"):
-            with st.spinner("Calculando simulação..."):
+                
+        if strat_cols[2].button("**🔄 Intercalar Novos**\n\nMix entre compra e aluguel", use_container_width=True, type="secondary"):
+            with st.spinner("Calculando simulação intercalada..."):
                 st.session_state.simulation_df = simulate(st.session_state.config, 'alternate')
                 st.session_state.comparison_df = pd.DataFrame()
-        st.markdown("<hr style='margin: 1rem 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-        if st.button("📊 Comparar Todas as Estratégias", use_container_width=True):
+                
+        st.markdown("<hr style='margin: 1.5rem 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
+        
+        if st.button("**📊 Comparar Todas as Estratégias**", use_container_width=True):
             with st.spinner("Calculando as três simulações..."):
                 df_buy = simulate(st.session_state.config, 'buy'); df_buy['Estratégia'] = 'Comprar'
                 df_rent = simulate(st.session_state.config, 'rent'); df_rent['Estratégia'] = 'Alugar'
                 df_alt = simulate(st.session_state.config, 'alternate'); df_alt['Estratégia'] = 'Intercalar'
                 st.session_state.comparison_df = pd.concat([df_buy, df_rent, df_alt])
                 st.session_state.simulation_df = pd.DataFrame()
+                
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # VISUALIZAÇÃO DE RESULTADOS - DESIGN MODERNO
     if not st.session_state.comparison_df.empty:
-        st.subheader("Análise Comparativa de Estratégias")
+        st.markdown("<h2 class='gradient-header'>📈 Análise Comparativa de Estratégias</h2>", unsafe_allow_html=True)
         df_comp = st.session_state.comparison_df
         final_buy = df_comp[df_comp['Estratégia'] == 'Comprar'].iloc[-1]
         final_rent = df_comp[df_comp['Estratégia'] == 'Alugar'].iloc[-1]
         final_alt = df_comp[df_comp['Estratégia'] == 'Intercalar'].iloc[-1]
+        
+        # KPI Cards modernos
         k1, k2, k3, k4 = st.columns(4)
-        with k1: render_kpi_card("Patrimônio (Comprar)", fmt_brl(final_buy['Patrimônio Líquido']), PRIMARY_COLOR)
-        with k2: render_kpi_card("Patrimônio (Alugar)", fmt_brl(final_rent['Patrimônio Líquido']), INFO_COLOR)
-        with k3: render_kpi_card("Patrimônio (Intercalar)", fmt_brl(final_alt['Patrimônio Líquido']), WARNING_COLOR)
+        with k1: 
+            render_kpi_card("Comprar", fmt_brl(final_buy['Patrimônio Líquido']), PRIMARY_COLOR, "🏠", "Patrimônio Final")
+        with k2: 
+            render_kpi_card("Alugar", fmt_brl(final_rent['Patrimônio Líquido']), INFO_COLOR, "🏢", "Patrimônio Final")
+        with k3: 
+            render_kpi_card("Intercalar", fmt_brl(final_alt['Patrimônio Líquido']), WARNING_COLOR, "🔄", "Patrimônio Final")
         with k4:
-            best_strategy = pd.Series({'Comprar': final_buy['Patrimônio Líquido'], 'Alugar': final_rent['Patrimônio Líquido'], 'Intercalar': final_alt['Patrimônio Líquido']}).idxmax()
-            render_kpi_card("Melhor Estratégia", best_strategy, SUCCESS_COLOR)
+            best_strategy = pd.Series({
+                'Comprar': final_buy['Patrimônio Líquido'], 
+                'Alugar': final_rent['Patrimônio Líquido'], 
+                'Intercalar': final_alt['Patrimônio Líquido']
+            }).idxmax()
+            render_kpi_card("Melhor Estratégia", best_strategy, SUCCESS_COLOR, "🏆", "Recomendação")
 
         st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Gráfico comparativo
         st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("### 📊 Evolução Comparativa")
         metric_options = ["Patrimônio Líquido", "Módulos Ativos", "Retiradas Acumuladas", "Fundo Acumulado", "Caixa (Final Mês)"]
         selected_metric = st.selectbox("Selecione uma métrica para comparar:", options=metric_options)
+        
         fig_comp = px.line(df_comp, x="Mês", y=selected_metric, color='Estratégia',
-                            color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': INFO_COLOR, 'Intercalar': WARNING_COLOR })
+                          color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': INFO_COLOR, 'Intercalar': WARNING_COLOR})
         apply_plot_theme(fig_comp, f'Comparativo de {selected_metric}', h=450)
         st.plotly_chart(fig_comp, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -508,24 +720,45 @@ if st.session_state.active_page == 'Dashboard':
     elif not st.session_state.simulation_df.empty:
         df = st.session_state.simulation_df
         final = df.iloc[-1]
-        st.subheader("Resultados da Simulação")
+        initial = df.iloc[0]
+        
+        st.markdown("<h2 class='gradient-header'>📊 Resultados da Simulação</h2>", unsafe_allow_html=True)
+        
+        # KPI Cards principais
         k1, k2, k3, k4 = st.columns(4)
-        with k1: render_kpi_card("Patrimônio Líquido Final", fmt_brl(final['Patrimônio Líquido']), PRIMARY_COLOR)
-        with k2: render_kpi_card("Retiradas Acumuladas", fmt_brl(final['Retiradas Acumuladas']), DANGER_COLOR)
-        with k3: render_kpi_card("Fundo Acumulado", fmt_brl(final['Fundo Acumulado']), INFO_COLOR)
-        with k4: render_kpi_card("Módulos Ativos Finais", f"{int(final['Módulos Ativos'])}", SUCCESS_COLOR)
+        with k1: 
+            render_kpi_card("Patrimônio Final", fmt_brl(final['Patrimônio Líquido']), PRIMARY_COLOR, "💰", "Acumulado total")
+        with k2: 
+            render_kpi_card("Retiradas Totais", fmt_brl(final['Retiradas Acumuladas']), DANGER_COLOR, "💸", "Valor sacado")
+        with k3: 
+            render_kpi_card("Fundo de Reserva", fmt_brl(final['Fundo Acumulado']), INFO_COLOR, "🛡️", "Proteção financeira")
+        with k4: 
+            render_kpi_card("Módulos Ativos", f"{int(final['Módulos Ativos'])}", SUCCESS_COLOR, "📦", "Crescimento do negócio")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("##### Análise Gráfica")
-        c1, c2 = st.columns(2)
-        with c1:
+        
+        # Gráficos
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown("##### 📈 Evolução do Patrimônio")
             fig_pat = go.Figure()
-            fig_pat.add_trace(go.Scatter(x=df["Mês"], y=df["Patrimônio Líquido"], name="Patrimônio", line=dict(color=PRIMARY_COLOR, width=3)))
-            fig_pat.add_trace(go.Bar(x=df["Mês"], y=df["Gastos"], name="Gastos", marker_color=WARNING_COLOR, opacity=.35))
-            apply_plot_theme(fig_pat, "Patrimônio vs Gastos")
+            fig_pat.add_trace(go.Scatter(
+                x=df["Mês"], 
+                y=df["Patrimônio Líquido"], 
+                name="Patrimônio", 
+                line=dict(color=PRIMARY_COLOR, width=4),
+                fill='tozeroy',
+                fillcolor=f'{PRIMARY_COLOR}20'
+            ))
+            apply_plot_theme(fig_pat, "Crescimento do Patrimônio Líquido")
             st.plotly_chart(fig_pat, use_container_width=True)
-        with c2:
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with col2:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown("##### 🥧 Distribuição Final")
             dist_data = {
                 "Valores": [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']],
                 "Categorias": ["Retiradas", "Fundo Total", "Caixa Final"]
@@ -533,20 +766,35 @@ if st.session_state.active_page == 'Dashboard':
             fig_pie = px.pie(dist_data, values="Valores", names="Categorias",
                              color="Categorias",
                              color_discrete_map={"Retiradas": DANGER_COLOR, "Fundo Total": INFO_COLOR, "Caixa Final": WARNING_COLOR},
-                             hole=.45)
-            apply_plot_theme(fig_pie, "Distribuição Final dos Recursos")
+                             hole=.5)
+            apply_plot_theme(fig_pie, "Distribuição dos Recursos")
             st.plotly_chart(fig_pie, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
     else:
-        st.info("👆 Escolha uma estratégia ou compare todas para iniciar a simulação.")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.info("""
+        ## 🚀 Comece sua Simulação
+        
+        **Selecione uma das estratégias acima para iniciar a análise:**
+        
+        - **🏠 Comprar**: Investimento em terrenos próprios (maior patrimônio no longo prazo)
+        - **🏢 Alugar**: Expansão rápida com aluguel de terrenos (menor investimento inicial)  
+        - **🔄 Intercalar**: Estratégia mista entre compra e aluguel
+        - **📊 Comparar**: Analise todas as estratégias lado a lado
+        
+        *Configure os parâmetros na página de Configurações para personalizar sua simulação.*
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------------------------
-# PÁGINA DE RELATÓRIOS E DADOS
+# PÁGINA DE RELATÓRIOS E DADOS (MANTIDA)
 # ---------------------------
 if st.session_state.active_page == 'Relatórios e Dados':
-    st.title("Relatórios e Dados")
-    st.markdown("<p class='subhead'>Explore os dados detalhados da simulação mês a mês.</p>", unsafe_allow_html=True)
+    st.markdown("<h1 class='gradient-header'>Relatórios e Dados</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='subhead'>Explore os dados detalhados da simulação mês a mês</p>", unsafe_allow_html=True)
+    
     df_to_show = pd.DataFrame()
     if not st.session_state.comparison_df.empty:
         df_to_show = st.session_state.comparison_df
@@ -570,7 +818,7 @@ if st.session_state.active_page == 'Relatórios e Dados':
 
         main_cols = st.columns([6, 4])
         with main_cols[0], st.container(border=True):
-            st.subheader("Análise por Ponto no Tempo")
+            st.subheader("📅 Análise por Ponto no Tempo")
             c1, c2 = st.columns(2)
             anos_disponiveis = sorted(df_analysis['Ano'].unique())
             selected_year = c1.selectbox("Selecione o ano", options=anos_disponiveis)
@@ -599,7 +847,7 @@ if st.session_state.active_page == 'Relatórios e Dados':
                     res_cols[3].metric("Retiradas Acumuladas", fmt_brl(data_point['Retiradas Acumuladas']))
 
         with main_cols[1], st.container(border=True):
-            st.subheader("Resumo Gráfico do Mês")
+            st.subheader("📊 Resumo Gráfico do Mês")
             if not ('data_point' in locals() and not filtered.empty):
                  st.info("Selecione um ponto no tempo para ver o gráfico.")
             else:
@@ -615,7 +863,7 @@ if st.session_state.active_page == 'Relatórios e Dados':
 
         st.markdown("<br>", unsafe_allow_html=True)
         with st.container(border=True):
-            st.subheader("Tabela Completa da Simulação")
+            st.subheader("📋 Tabela Completa da Simulação")
             all_columns = df_analysis.columns.tolist()
             state_key = f"column_visibility_{slug(selected_strategy or 'default')}"
             if state_key not in st.session_state or set(st.session_state[state_key].keys()) != set(all_columns):
