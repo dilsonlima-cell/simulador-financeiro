@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v3 com Campos Automáticos
+# Simulador Modular — v4 com Correção Anual Unificada
 
 import streamlit as st
 import pandas as pd
@@ -117,7 +117,7 @@ def df_to_excel_bytes(df: pd.DataFrame):
             worksheet.set_column(i, i, width)
             # Aplica formatação de moeda para colunas relevantes
             if any(k in col.lower() for k in ["receita", "custo", "valor", "manutenção", "aluguel", "parcela", "gasto", "aporte", "fundo", "retirada", "caixa", "investimento", "patrimônio"]):
-                 worksheet.set_column(i, i, width, money_fmt)
+                   worksheet.set_column(i, i, width, money_fmt)
     return output.getvalue()
 
 def slug(s: str) -> str:
@@ -139,35 +139,52 @@ def simulate(_config, reinvestment_strategy):
     months = cfg_global['years'] * 12
     rows = []
 
-    # Inicialização de variáveis de estado
+    # --- INICIALIZAÇÃO DE VARIÁVEIS DE ESTADO E FINANCEIRAS ---
+    # Variáveis de estado da simulação
     modules_rented = cfg_rented['modules_init']
     modules_owned = cfg_owned['modules_init']
     caixa = 0.0
     investimento_total = (modules_rented * cfg_rented['cost_per_module']) + (modules_owned * cfg_owned['cost_per_module'])
     fundo_ac = 0.0
     retiradas_ac = 0.0
+    valor_terrenos_adicionais = 0.0
+    compra_intercalada_counter = 0
+
+    # VARIÁVEIS LOCAIS PARA CORREÇÃO ANUAL (INFLAÇÃO)
+    # Estas variáveis serão atualizadas anualmente com base na taxa geral
+    correction_rate_pct = cfg_global.get('general_correction_rate', 0.0) / 100.0
+    
+    # Custos de aquisição de novos módulos
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
     custo_modulo_atual_owned = cfg_owned['cost_per_module']
-    # ALTERAÇÃO: Variável restaurada para calcular o valor de terrenos adicionais.
-    valor_terrenos_adicionais = 0.0
+
+    # Valores "por módulo" ou "por nova unidade"
+    receita_p_mod_rented = cfg_rented['revenue_per_module']
+    receita_p_mod_owned = cfg_owned['revenue_per_module']
+    manut_p_mod_rented = cfg_rented['maintenance_per_module']
+    manut_p_mod_owned = cfg_owned['maintenance_per_module']
+    aluguel_p_novo_mod = cfg_rented['rent_per_new_module']
+    parcela_p_novo_terreno = cfg_owned['monthly_land_plot_parcel']
+
+    # Custos mensais correntes (que acumulam com o tempo)
+    aluguel_mensal_corrente = cfg_rented['rent_value']
+    parcelas_terrenos_novos_mensal_corrente = 0.0
 
     # Lógica de financiamento do terreno inicial
     valor_entrada_terreno = 0.0
-    valor_parcela_terreno_inicial = 0.0
+    parcela_terreno_inicial_atual = 0.0
     if cfg_owned['land_total_value'] > 0:
         valor_entrada_terreno = cfg_owned['land_total_value'] * (cfg_owned['land_down_payment_pct'] / 100.0)
         valor_financiado = cfg_owned['land_total_value'] - valor_entrada_terreno
-        valor_parcela_terreno_inicial = valor_financiado / cfg_owned['land_installments'] if cfg_owned['land_installments'] > 0 else 0
+        if cfg_owned['land_installments'] > 0:
+            parcela_terreno_inicial_atual = valor_financiado / cfg_owned['land_installments']
         investimento_total += valor_entrada_terreno
-
-    aluguel_mensal_corrente = cfg_rented['rent_value']
-    parcelas_terrenos_novos_mensal_corrente = 0.0
-    compra_intercalada_counter = 0
 
     # Loop principal da simulação mês a mês
     for m in range(1, months + 1):
-        receita = (modules_rented * cfg_rented['revenue_per_module']) + (modules_owned * cfg_owned['revenue_per_module'])
-        manut = (modules_rented * cfg_rented['maintenance_per_module']) + (modules_owned * cfg_owned['maintenance_per_module'])
+        # ATUALIZAÇÃO: Cálculos usam variáveis locais que são corrigidas anualmente
+        receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
+        manut = (modules_rented * manut_p_mod_rented) + (modules_owned * manut_p_mod_owned)
         novos_modulos_comprados = 0
 
         # Aportes
@@ -180,8 +197,9 @@ def simulate(_config, reinvestment_strategy):
         # Pagamento da parcela do terreno inicial
         parcela_terreno_inicial_mes = 0.0
         if cfg_owned['land_total_value'] > 0 and m <= cfg_owned['land_installments']:
-            parcela_terreno_inicial_mes = valor_parcela_terreno_inicial
-            investimento_total += valor_parcela_terreno_inicial
+            # ATUALIZAÇÃO: Usa a variável corrigida anualmente
+            parcela_terreno_inicial_mes = parcela_terreno_inicial_atual
+            investimento_total += parcela_terreno_inicial_mes
         if m == 1:
             caixa -= valor_entrada_terreno # Pagamento da entrada
 
@@ -208,7 +226,7 @@ def simulate(_config, reinvestment_strategy):
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
 
-        # Lógica de Reinvestimento (anual)
+        # Lógica de Reinvestimento (ocorre ao final de cada ano)
         if m % 12 == 0:
             custo_expansao = 0.0
             if reinvestment_strategy == 'buy':
@@ -227,38 +245,56 @@ def simulate(_config, reinvestment_strategy):
 
                     if reinvestment_strategy == 'buy':
                         modules_owned += novos_modulos_comprados
-                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * cfg_owned['monthly_land_plot_parcel']
-                        # ALTERAÇÃO: Lógica para adicionar valor de terrenos novos ao patrimônio foi restaurada.
+                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
                         valor_terrenos_adicionais += novos_modulos_comprados * cfg_owned['land_value_per_module']
                     elif reinvestment_strategy == 'rent':
                         modules_rented += novos_modulos_comprados
-                        # ALTERAÇÃO: Lógica de aumento do aluguel restaurada.
-                        aluguel_mensal_corrente += novos_modulos_comprados * cfg_rented['rent_per_new_module']
+                        aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
                     elif reinvestment_strategy == 'alternate':
                         for _ in range(novos_modulos_comprados):
                             if compra_intercalada_counter % 2 == 0:
                                 modules_owned += 1
-                                parcelas_terrenos_novos_mensal_corrente += cfg_owned['monthly_land_plot_parcel']
+                                parcelas_terrenos_novos_mensal_corrente += parcela_p_novo_terreno
                                 valor_terrenos_adicionais += cfg_owned['land_value_per_module']
                             else:
                                 modules_rented += 1
-                                aluguel_mensal_corrente += cfg_rented['rent_per_new_module']
+                                aluguel_mensal_corrente += aluguel_p_novo_mod
                             compra_intercalada_counter += 1
 
-            # Correção anual de custos
-            custo_modulo_atual_owned *= (1 + cfg_owned['cost_correction_rate'] / 100.0)
-            custo_modulo_atual_rented *= (1 + cfg_rented['cost_correction_rate'] / 100.0)
+            # --- NOVA LÓGICA DE CORREÇÃO ANUAL GERAL ---
+            # Aplica a correção a todos os valores financeiros relevantes para o ano seguinte
+            correction_factor = 1 + correction_rate_pct
+            
+            # Custos de aquisição futuros
+            custo_modulo_atual_owned *= correction_factor
+            custo_modulo_atual_rented *= correction_factor
+
+            # Receitas e manutenções por módulo futuras
+            receita_p_mod_rented *= correction_factor
+            receita_p_mod_owned *= correction_factor
+            manut_p_mod_rented *= correction_factor
+            manut_p_mod_owned *= correction_factor
+
+            # Custos mensais correntes (acumulados)
+            aluguel_mensal_corrente *= correction_factor
+            parcelas_terrenos_novos_mensal_corrente *= correction_factor
+            parcela_terreno_inicial_atual *= correction_factor
+            
+            # Custos base para novas unidades futuras
+            aluguel_p_novo_mod *= correction_factor
+            parcela_p_novo_terreno *= correction_factor
 
         # Cálculo do patrimônio líquido
-        patrimonio_liquido = ((modules_owned + modules_rented) * custo_modulo_atual_owned) + caixa + fundo_ac + cfg_owned['land_total_value'] + valor_terrenos_adicionais
+        patrimonio_liquido = (modules_owned * custo_modulo_atual_owned) + (modules_rented * custo_modulo_atual_rented) + caixa + fundo_ac + cfg_owned['land_total_value'] + valor_terrenos_adicionais
 
         rows.append({
             "Mês": m, "Ano": (m - 1) // 12 + 1,
             "Módulos Ativos": modules_owned + modules_rented,
             "Módulos Alugados": modules_rented, "Módulos Próprios": modules_owned,
             "Receita": receita, "Manutenção": manut, "Aluguel": aluguel_mensal_corrente,
+            "Parcela Terreno Inicial": parcela_terreno_inicial_mes,
             "Parcelas Terrenos (Novos)": parcelas_terrenos_novos_mensal_corrente,
-            "Gastos": manut + aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente,
+            "Gastos": manut + aluguel_mensal_corrente + parcela_terreno_inicial_mes + parcelas_terrenos_novos_mensal_corrente,
             "Aporte": aporte_mes, "Fundo (Mês)": fundo_mes_total,
             "Retirada (Mês)": retirada_mes_efetiva, "Caixa (Final Mês)": caixa,
             "Investimento Total Acumulado": investimento_total,
@@ -276,22 +312,22 @@ def get_default_config():
     """Retorna a configuração padrão do simulador."""
     return {
         'rented': {
-            'modules_init': 1, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0,
+            'modules_init': 1, 'cost_per_module': 75000.0,
             'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
             'rent_value': 750.0,
-            # ALTERAÇÃO: Campo restaurado com valor padrão calculado.
             'rent_per_new_module': 950.0 # Soma de maintenance (200) + rent_value (750)
         },
         'owned': {
-            'modules_init': 0, 'cost_per_module': 75000.0, 'cost_correction_rate': 5.0,
+            'modules_init': 0, 'cost_per_module': 75000.0,
             'revenue_per_module': 4500.0, 'maintenance_per_module': 200.0,
             'monthly_land_plot_parcel': 0.0,
-             # ALTERAÇÃO: Campo restaurado com valor padrão calculado.
             'land_value_per_module': 200.0, # Soma de parcel (0) + maintenance (200)
             'land_total_value': 0.0, 'land_down_payment_pct': 20.0, 'land_installments': 120
         },
         'global': {
             'years': 15, 'max_withdraw_value': 50000.0,
+            # NOVO: Taxa de correção unificada para inflação
+            'general_correction_rate': 5.0,
             'aportes': [], 'retiradas': [], 'fundos': []
         }
     }
@@ -336,10 +372,9 @@ if st.session_state.active_page == 'Configurações':
     cfg_r['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_r['cost_per_module'], format="%.2f", key="rent_cost_mod")
     cfg_r['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_r['revenue_per_module'], format="%.2f", key="rent_rev_mod")
     cfg_r['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_r['maintenance_per_module'], format="%.2f", key="rent_maint_mod")
-    cfg_r['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_r['cost_correction_rate'], format="%.1f", key="rent_corr_rate")
     cfg_r['rent_value'] = c2.number_input("Aluguel mensal fixo (R$)", 0.0, value=cfg_r['rent_value'], format="%.2f", key="rent_base_rent")
     
-    # ALTERAÇÃO: Cálculo automático e exibição do campo restaurado.
+    # Cálculo automático do custo de aluguel por novo módulo
     cfg_r['rent_per_new_module'] = cfg_r['maintenance_per_module'] + cfg_r['rent_value']
     c1.number_input(
         "Custo de aluguel por novo módulo (R$)", 0.0,
@@ -375,7 +410,6 @@ if st.session_state.active_page == 'Configurações':
     cfg_o['cost_per_module'] = c1.number_input("Custo por módulo (R$)", 0.0, value=cfg_o['cost_per_module'], format="%.2f", key="own_cost_mod")
     cfg_o['revenue_per_module'] = c1.number_input("Receita mensal/módulo (R$)", 0.0, value=cfg_o['revenue_per_module'], format="%.2f", key="own_rev_mod")
     cfg_o['maintenance_per_module'] = c2.number_input("Manutenção mensal/módulo (R$)", 0.0, value=cfg_o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
-    cfg_o['cost_correction_rate'] = c2.number_input("Correção anual do custo (%)", 0.0, value=cfg_o['cost_correction_rate'], format="%.1f", key="own_corr_rate")
     
     cfg_o['monthly_land_plot_parcel'] = c2.number_input(
         "Parcela mensal por novo terreno (R$)", 0.0, 
@@ -385,7 +419,7 @@ if st.session_state.active_page == 'Configurações':
         help="Este valor é preenchido automaticamente se um financiamento de terreno inicial for configurado."
     )
     
-    # ALTERAÇÃO: Cálculo automático e exibição do campo restaurado.
+    # Cálculo automático do valor do terreno por novo módulo
     cfg_o['land_value_per_module'] = cfg_o['monthly_land_plot_parcel'] + cfg_o['maintenance_per_module']
     c1.number_input(
         "Valor do terreno por novo módulo (R$)", 0.0,
@@ -400,7 +434,14 @@ if st.session_state.active_page == 'Configurações':
     st.subheader("Parâmetros Globais")
     cfg_g = st.session_state.config['global']
     c1, c2 = st.columns(2)
-    cfg_g['years'] = c1.number_input("Horizonte de investimento (anos)", 1, 50, cfg_g['years'])
+    cfg_g['years'] = c1.number_input("Horizonte de investimento (anos)", 1, 50, value=cfg_g['years'])
+    # NOVO INPUT: Taxa de correção unificada
+    cfg_g['general_correction_rate'] = c1.number_input(
+        "Correção Anual Geral (Inflação %)", 0.0, 100.0,
+        value=cfg_g.get('general_correction_rate', 5.0), format="%.1f",
+        key="global_corr_rate",
+        help="Taxa anual que corrige receitas, manutenções, aluguéis e parcelas."
+    )
     cfg_g['max_withdraw_value'] = c2.number_input("Valor máximo de retirada mensal (R$)", 0.0, value=cfg_g['max_withdraw_value'], format="%.2f", help="Teto para retiradas baseadas em % do lucro.")
     st.markdown('</div><br>', unsafe_allow_html=True)
 
@@ -450,6 +491,7 @@ if st.session_state.active_page == 'Configurações':
 # ---------------------------
 # PÁGINA DO DASHBOARD
 # ---------------------------
+# (O código para as páginas 'Dashboard' e 'Relatórios e Dados' permanece o mesmo)
 if st.session_state.active_page == 'Dashboard':
     st.title("Dashboard Estratégico")
     st.markdown("<p class='subhead'>Simule uma estratégia de reinvestimento ou compare todas.</p>", unsafe_allow_html=True)
@@ -498,7 +540,7 @@ if st.session_state.active_page == 'Dashboard':
             metric_options = ["Patrimônio Líquido", "Módulos Ativos", "Retiradas Acumuladas", "Fundo Acumulado", "Caixa (Final Mês)"]
             selected_metric = st.selectbox("Selecione uma métrica para comparar:", options=metric_options)
             fig_comp = px.line(df_comp, x="Mês", y=selected_metric, color='Estratégia', title=f'Comparativo de {selected_metric}',
-                               color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': MUTED_TEXT_COLOR, 'Intercalar': WARNING_COLOR })
+                                color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': MUTED_TEXT_COLOR, 'Intercalar': WARNING_COLOR })
             fig_comp.update_layout(height=450, margin=dict(l=10,r=10,t=40,b=10), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR)
             st.plotly_chart(fig_comp, use_container_width=True)
 
@@ -525,7 +567,7 @@ if st.session_state.active_page == 'Dashboard':
         with c2, st.container(border=True):
             dist_data = { 'Valores': [final['Retiradas Acumuladas'], final['Fundo Acumulado'], final['Caixa (Final Mês)']], 'Categorias': ['Retiradas', 'Fundo Total', 'Caixa Final'] }
             fig_pie = px.pie(dist_data, values='Valores', names='Categorias',
-                             color_discrete_sequence=[DANGER_COLOR, INFO_COLOR, WARNING_COLOR], hole=0.4)
+                                color_discrete_sequence=[DANGER_COLOR, INFO_COLOR, WARNING_COLOR], hole=0.4)
             fig_pie.update_layout(title="Distribuição Final dos Recursos", height=400, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.1), paper_bgcolor=CARD_COLOR)
             st.plotly_chart(fig_pie, use_container_width=True)
     else:
@@ -568,14 +610,14 @@ if st.session_state.active_page == 'Relatórios e Dados':
             c1, c2 = st.columns(2)
             anos_disponiveis = sorted(df_analysis['Ano'].unique())
             selected_year = c1.selectbox("Selecione o ano", options=anos_disponiveis)
-              
+            
             months_in_year = df_analysis[df_analysis['Ano'] == selected_year]['Mês'].unique()
             month_labels = sorted([((m - 1) % 12) + 1 for m in months_in_year])
             selected_month_label = c2.selectbox("Selecione o mês", options=month_labels)
-                
+            
             selected_month_abs = df_analysis[(df_analysis['Ano'] == selected_year) & (((df_analysis['Mês'] - 1) % 12) + 1 == selected_month_label)]['Mês'].iloc[0]
             data_point = df_analysis.loc[df_analysis["Mês"] == selected_month_abs].iloc[0]
-                
+            
             st.markdown("---")
             res_cols = st.columns(4)
             res_cols[0].metric("Total de Módulos", f"{int(data_point['Módulos Ativos'])}")
@@ -589,7 +631,7 @@ if st.session_state.active_page == 'Relatórios e Dados':
 
         with main_cols[1], st.container(border=True):
             st.subheader("Resumo Gráfico do Mês")
-                
+            
             chart_data = pd.DataFrame({
                 "Categoria": ["Receita", "Gastos", "Retirada", "Fundo"],
                 "Valor": [
@@ -655,7 +697,7 @@ if st.session_state.active_page == 'Relatórios e Dados':
                 for col in format_cols:
                     if col in df_display.columns:
                         df_display[col] = df_display[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
-            
+                
                 st.dataframe( df_display[cols_to_show], use_container_width=True, hide_index=True )
 
                 # Controles de Paginação
