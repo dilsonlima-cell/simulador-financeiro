@@ -1,7 +1,6 @@
 # app.py
-# Simulador Modular — v11.1 (final)
+# Simulador Modular — v11.1 (final) - Adaptado para Streamlit
 # Correções de desembolso total, layout hero + navegação superior por abas e novos gráficos
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -20,14 +19,12 @@ SUCCESS_COLOR   = "#10B981"      # Verde sucesso
 DANGER_COLOR    = "#EF4444"      # Vermelho erro
 WARNING_COLOR   = "#F59E0B"      # Amarelo alerta
 INFO_COLOR      = "#3B82F6"      # Azul info
-
 APP_BG          = "#FFFFFF"      # Fundo do app
 CARD_COLOR      = "#FFFFFF"      # Cards brancos
 TEXT_COLOR      = "#0F172A"      # Texto escuro
 MUTED_TEXT_COLOR= "#334155"      # Texto secundário
 TABLE_BORDER_COLOR = "#E5E7EB"
 CHART_GRID_COLOR  = "#E2E8F0"
-
 KPI_BG_COLOR    = "#4A8BC9"      # Azul médio p/ cards de KPI
 
 # --- COLUNAS PARA FORMATAÇÃO ---
@@ -46,7 +43,7 @@ COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próp
 # ---------------------------
 def fmt_brl(v):
     try:
-        if v is None or (isinstance(v, float) and np.isnan(v)):
+        if pd.isna(v):
             return "-"
         s = f"{float(v):,.2f}"
         s = s.replace(",", "X").replace(".", ",").replace("X", ".")
@@ -79,16 +76,20 @@ def calculate_summary_metrics(df):
     summary = {"roi_pct": 0, "break_even_month": "N/A", "total_investment": 0, "net_profit": 0}
     if df.empty:
         return summary
+
     final = df.iloc[-1]
     total_investment = final['Investimento Total Acumulado']
     summary["total_investment"] = total_investment
+
     if total_investment > 0:
         net_profit = final['Patrimônio Líquido'] - total_investment
         summary["roi_pct"] = (net_profit / total_investment) * 100
         summary["net_profit"] = net_profit
+
     break_even_df = df[df['Patrimônio Líquido'] >= df['Investimento Total Acumulado']]
     if not break_even_df.empty:
         summary["break_even_month"] = int(break_even_df.iloc[0]['Mês'])
+
     return summary
 
 def df_to_excel_bytes(df: pd.DataFrame):
@@ -141,7 +142,6 @@ st.markdown(f"""
         .main .block-container {{ padding: 0 1.25rem 2rem; max-width: 1400px; }}
         .stApp {{ background: {APP_BG}; }}
         h1, h2, h3, h4, h5, h6 {{ color: {TEXT_COLOR}; font-weight: 700; }}
-
         /* HERO */
         .hero {{
             background: linear-gradient(90deg, #F59E0B 0%, #F97316 50%, #F59E0B 100%);
@@ -152,7 +152,6 @@ st.markdown(f"""
         .hero-badges {{ display:flex; gap:.75rem; margin-top:.7rem; flex-wrap:wrap; }}
         .hb {{ background: rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.35);
                padding:.25rem .55rem; border-radius:999px; font-weight:600; font-size:.82rem; }}
-
         /* Cards / KPI */
         .card {{ background: {CARD_COLOR}; border-radius: 14px; padding: 1.25rem; border: 1px solid {TABLE_BORDER_COLOR}; margin-bottom: 1rem; }}
         .kpi-card-modern {{
@@ -163,14 +162,11 @@ st.markdown(f"""
         .kpi-card-title-modern {{ font-size: .95rem; font-weight: 600; opacity: .95; margin-top: .35rem; }}
         .kpi-card-value-modern {{ font-size: 1.8rem; font-weight: 800; line-height: 1.1; }}
         .kpi-card-subtitle {{ font-size: .82rem; opacity: .9; margin-top: .25rem; }}
-
         .section-title {{ font-weight: 800; margin: .25rem 0 .75rem; color: {TEXT_COLOR}; }}
-
         /* Report metric */
         .report-metric-card {{ background: {CARD_COLOR}; border-radius: 8px; padding: .6rem .9rem; border: 1px solid {TABLE_BORDER_COLOR}; text-align: center; margin-bottom: .5rem; }}
         .report-metric-title {{ font-size: .78rem; color: {MUTED_TEXT_COLOR}; margin-bottom: .2rem; text-transform: uppercase; font-weight: 700; }}
         .report-metric-value {{ font-size: 1.15rem; font-weight: 800; color: {TEXT_COLOR}; }}
-
         .stButton > button {{
             border-radius: 12px; border: 2px solid {PRIMARY_COLOR};
             background-color: {PRIMARY_COLOR}; color: white;
@@ -178,21 +174,17 @@ st.markdown(f"""
         }}
         .stButton > button:hover {{ background-color: #D98200; border-color: #D98200; transform: translateY(-1px); }}
         .stButton > button[kind="secondary"] {{ background: transparent; color: {PRIMARY_COLOR}; }}
-
         .invest-strip {{
             background: linear-gradient(90deg, #F59E0B, #22C55E);
             color: white; border-radius: 10px; padding: .6rem 1rem; font-weight: 800; display:flex; justify-content:space-between; align-items:center;
             border: 1px solid rgba(0,0,0,0.05);
         }}
-
         /* Data inputs */
         .stTextInput input, .stNumberInput input, .stSelectbox select {{
             background: {CARD_COLOR} !important; color: {TEXT_COLOR} !important; border: 1px solid {TABLE_BORDER_COLOR} !important;
         }}
-
         /* Tabela */
         [data-testid="stDataFrame"] th {{ background-color: #F7FAFF !important; color: {TEXT_COLOR} !important; }}
-
     </style>
 """, unsafe_allow_html=True)
 
@@ -247,7 +239,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     valor_compra_terreno = 0.0
     taxa_juros_mensal = 0.0
     amortizacao_mensal = 0.0
-
     aluguel_acumulado = 0.0
     parcelas_novas_acumuladas = 0.0
 
@@ -265,6 +256,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     for m in range(1, months + 1):
         receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
         manut   = (modules_rented * manut_p_mod_rented)   + (modules_owned * manut_p_mod_owned)
+
         novos_modulos_comprados = 0
 
         # Aportes
@@ -299,6 +291,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             base = lucro_operacional
             retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
             fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
+
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
                 retirada_mes_efetiva = cfg_global['max_withdraw_value']
                 fundo_mes_total = fundo_potencial
@@ -384,9 +377,11 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         # Patrimônio
         valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12))
         patrimonio_terreno = valor_mercado_terreno - saldo_financiamento_terreno
+
         ativos  = historical_value_owned + historical_value_rented + caixa + fundo_ac + patrimonio_terreno
         passivos= saldo_financiamento_terreno
         patrimonio_liquido = ativos - passivos
+
         desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
         gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
 
@@ -463,10 +458,13 @@ def get_default_config():
 
 if 'config' not in st.session_state:
     st.session_state.config = get_default_config()
+
 if 'simulation_df' not in st.session_state:
     st.session_state.simulation_df = pd.DataFrame()
+
 if 'comparison_df' not in st.session_state:
     st.session_state.comparison_df = pd.DataFrame()
+
 if 'selected_strategy' not in st.session_state:
     st.session_state.selected_strategy = None
 
@@ -497,7 +495,6 @@ with tab_config:
 
     # Parâmetros iniciais: 3 cards lado a lado
     c1, c2, c3 = st.columns(3)
-
     with c1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 🏢 Terreno Alugado")
@@ -566,7 +563,6 @@ with tab_config:
 
     # Eventos Financeiros em 3 cards
     e1, e2, e3 = st.columns(3)
-
     with e1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 💸 Aportes de Investimento")
@@ -682,6 +678,7 @@ with tab_dashboard:
         final_buy = dfc[dfc['Estratégia']=='Comprar'].iloc[-1]
         final_rent= dfc[dfc['Estratégia']=='Alugar' ].iloc[-1]
         final_alt = dfc[dfc['Estratégia']=='Intercalar'].iloc[-1]
+
         k1, k2, k3, k4 = st.columns(4)
         with k1: render_kpi_card("Comprar", fmt_brl(final_buy['Patrimônio Líquido']), PRIMARY_COLOR, "🏠", "Patrimônio Final")
         with k2: render_kpi_card("Alugar", fmt_brl(final_rent['Patrimônio Líquido']), INFO_COLOR, "🏢", "Patrimônio Final")
@@ -831,6 +828,7 @@ with tab_sheet:
             if state_key not in st.session_state:
                 default_cols = ['Mês','Ano','Módulos Ativos','Receita','Gastos','Caixa (Final Mês)','Patrimônio Líquido','Investimento Total Acumulado']
                 st.session_state[state_key] = {c: (c in default_cols) for c in all_cols}
+
             st.markdown("Selecione as colunas para exibir:")
             cols_to_show = []
             grid = st.columns(3)
@@ -840,6 +838,7 @@ with tab_sheet:
                     st.session_state[state_key][c] = st.toggle(c, value=st.session_state[state_key][c], key=tkey)
                     if st.session_state[state_key][c]:
                         cols_to_show.append(c)
+
             if not cols_to_show:
                 st.warning("Selecione ao menos uma coluna.")
             else:
