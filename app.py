@@ -1,19 +1,3 @@
-O código fornecido (Pasted_Text_1759331988014.txt) está quase perfeito, mas ainda contém alguns erros e inconsistências. Abaixo está uma análise e a versão corrigida, incorporando as funcionalidades dos outros arquivos e garantindo que o motor de simulação esteja 100% funcional e preciso.
-
-**Principais Problemas Identificados e Corrigidos:**
-
-1.  **Erros de Lógica e Nomenclatura:** O código original (e suas variações anteriores) tinha inconsistências na nomenclatura das chaves do dicionário de configuração (ex: `cfg['alugado']` vs `cfg['rented']`) e no uso de variáveis dentro do motor de simulação, o que poderia levar a erros de `KeyError` ou cálculos incorretos.
-2.  **Correção de `StreamlitMixedNumericTypesError`:** A implementação de conversão para `float` antes de passar para `st.number_input` foi mantida e aplicada corretamente a todos os campos numéricos de configuração.
-3.  **Estrutura de Abas e Componentes:** A estrutura de abas foi ajustada para refletir os layouts mais modernos (`Melhor_layOut_Lovable.txt`, `layOut_Lovable.txt`), renomeando-as para "Dashboard", "Configurações" e "Planilha".
-4.  **Cartões de Transações:** Os cartões de "Aportes", "Retiradas" e "Fundo de Reserva" foram mantidos exclusivamente na aba "Configurações", conforme solicitado, e removidos da aba "Dashboard".
-5.  **Cálculos de Simulação:** O motor de simulação foi reescrito e verificado novamente para garantir precisão, especialmente no que diz respeito ao cálculo da parcela do terreno inicial e das parcelas para novos módulos, e como essas parcelas impactam o caixa e os desembolsos totais.
-6.  **Contraste de Cores:** A paleta de cores foi mantida e ajustada para garantir bom contraste entre texto e fundo, conforme a imagem de referência e os layouts fornecidos.
-7.  **Análise Ponto no Tempo:** A lógica para filtrar os dados do DataFrame com base no ano e mês selecionados foi corrigida para garantir que o cartão exiba os valores corretos para o ponto específico no tempo.
-8.  **Campo Valor da Parcela:** O campo `Parcelas Terrenos (Novos)` agora é exibido corretamente nos resultados e na tabela, representando o custo mensal das parcelas dos terrenos associados aos novos módulos comprados.
-
-Aqui está o código completo e corrigido:
-
-```python
 # app.py
 # Simulador Modular — v11.2 (final) - Corrigido e Aperfeiçoado
 import streamlit as st
@@ -965,4 +949,3 @@ with tab_sheet:
                 file_name=f"relatorio_simulacao_{slug(selected_strategy or 'geral')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-```
