@@ -205,9 +205,12 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     historical_value_owned  = modules_owned  * cfg_owned['cost_per_module']
     fundo_ac = 0.0
     retiradas_ac = 0.0
+    # --- CORREÇÃO: Inicialização das variáveis acumuladoras ---
+    aluguel_acumulado = 0.0       # <-- CORREÇÃO
+    parcelas_novas_acumuladas = 0.0  # <-- CORREÇÃO
+    # ---
     correction_rate_pct = cfg_global.get('general_correction_rate', 0.0) / 100.0
     land_appreciation_rate_pct = cfg_global.get('land_appreciation_rate', 3.0) / 100.0
-
     # Preços atuais (serão atualizados anualmente)
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
     custo_modulo_atual_owned  = cfg_owned['cost_per_module']
@@ -217,11 +220,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     manut_p_mod_owned         = cfg_owned['maintenance_per_module']
     aluguel_p_novo_mod        = cfg_rented['rent_per_new_module']
     parcela_p_novo_terreno    = cfg_owned['monthly_land_plot_parcel']
-
     # Calcula o aluguel mensal inicial e das parcelas novas
     aluguel_mensal_corrente = cfg_rented['rent_value'] + (cfg_rented['modules_init'] * cfg_rented['rent_per_new_module'])
     parcelas_terrenos_novos_mensal_corrente = 0.0
-
     # Inicializa variáveis de financiamento do terreno
     saldo_financiamento_terreno = 0.0
     equity_terreno_inicial = 0.0
@@ -230,7 +231,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     valor_compra_terreno = 0.0
     taxa_juros_mensal = 0.0
     amortizacao_mensal = 0.0
-
     # Se há terreno próprio, inicializa o financiamento
     if cfg_owned['land_total_value'] > 0:
         valor_compra_terreno = cfg_owned['land_total_value']
@@ -242,23 +242,19 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
             taxa_juros_mensal = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
         investimento_total += valor_entrada_terreno
-
     # Loop principal de simulação
     for m in range(1, months + 1):
         # Calcular Receita e Manutenção
         receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
         manut   = (modules_rented * manut_p_mod_rented)   + (modules_owned * manut_p_mod_owned)
         novos_modulos_comprados = 0
-
         # Adicionar Aportes
         aporte_mes = sum(a.get('valor', 0.0) for a in cfg_global['aportes'] if a.get('mes') == m)
         caixa += aporte_mes
         investimento_total += aporte_mes
-
         # Calcular Gastos Operacionais
         gastos_operacionais = aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente
         lucro_operacional = receita - manut - gastos_operacionais
-
         # Calcular Parcela do Terreno Inicial
         juros_terreno_mes = 0.0
         amortizacao_terreno_mes = 0.0
@@ -271,11 +267,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             equity_terreno_inicial += amortizacao_terreno_mes
             juros_acumulados += juros_terreno_mes
             amortizacao_acumulada += amortizacao_terreno_mes
-
         # Atualizar Caixa
         caixa += lucro_operacional
         caixa -= parcela_terreno_inicial_mes
-
         # Distribuição (Retiradas + Fundo) limitada ao caixa
         fundo_mes_total = 0.0
         retirada_mes_efetiva = 0.0
@@ -283,14 +277,12 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             base = lucro_operacional
             retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
             fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
-
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
                 retirada_mes_efetiva = cfg_global['max_withdraw_value']
                 fundo_mes_total = fundo_potencial
             else:
                 retirada_mes_efetiva = retirada_potencial
                 fundo_mes_total = fundo_potencial
-
             total_distrib = retirada_mes_efetiva + fundo_mes_total
             if total_distrib > caixa:
                 if caixa > 0:
@@ -300,15 +292,12 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                 else:
                     retirada_mes_efetiva = 0.0
                     fundo_mes_total = 0.0
-
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
-
         # Acumuladores de desembolso corrente
-        aluguel_acumulado += aluguel_mensal_corrente
-        parcelas_novas_acumuladas += parcelas_terrenos_novos_mensal_corrente
-
+        aluguel_acumulado += aluguel_mensal_corrente  # <-- Agora funciona, pois foi inicializada!
+        parcelas_novas_acumuladas += parcelas_terrenos_novos_mensal_corrente  # <-- Agora funciona, pois foi inicializada!
         # Reinvestimento anual
         if m % 12 == 0:
             if reinvestment_strategy == 'buy':
@@ -350,7 +339,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                             historical_value_rented += custo_da_compra
                             modules_rented += novos_modulos_comprados
                             aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
-
             # Aplicar correção anual nos preços
             correction_factor = 1 + correction_rate_pct
             custo_modulo_atual_owned  *= correction_factor
@@ -363,7 +351,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             parcelas_terrenos_novos_mensal_corrente *= correction_factor
             parcela_p_novo_terreno    *= correction_factor
             aluguel_p_novo_mod        *= correction_factor
-
         # Calcular Patrimônio
         valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12))
         patrimonio_terreno = valor_mercado_terreno - saldo_financiamento_terreno
@@ -372,7 +359,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         patrimonio_liquido = ativos - passivos
         desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
         gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
-
         # Adicionar linha ao DataFrame
         rows.append({
             "Mês": m,
@@ -406,9 +392,8 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             "Parcelas Novas Acumuladas": parcelas_novas_acumuladas,
             "Desembolso Total": desembolso_total
         })
-
     return pd.DataFrame(rows)
-
+    
 # ---------------------------
 # Estado Inicial
 # ---------------------------
@@ -932,4 +917,5 @@ with tab_sheet:
                 file_name=f"relatorio_simulacao_{slug(selected_strategy or 'geral')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
 
