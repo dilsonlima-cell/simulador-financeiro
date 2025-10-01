@@ -10,20 +10,19 @@ import json
 import hashlib
 from copy import deepcopy
 
-# --- PALETA DE CORES (fiel ao layout da imagem) ---
+# --- PALETA DE CORES (fiel à imagem) ---
 PRIMARY_COLOR   = "#FF9234"      # Laranja vibrante do header
 SECONDARY_COLOR = "#6C757D"      # Cinza escuro dos textos secundários
 SUCCESS_COLOR   = "#28A745"      # Verde sucesso
 DANGER_COLOR    = "#DC3545"      # Vermelho erro
 WARNING_COLOR   = "#FFC107"      # Amarelo alerta
 INFO_COLOR      = "#17A2B8"      # Azul info
-APP_BG          = "#FFFFFF"      # Fundo branco
-CARD_COLOR      = "#FFFFFF"      # Cards brancos
+APP_BG          = "#FFFFFF"      # Fundo branco da página
+CARD_COLOR      = "#FFFFFF"      # Fundo branco dos cards
 TEXT_COLOR      = "#212529"      # Texto escuro principal
 MUTED_TEXT_COLOR= "#6C757D"      # Texto cinza secundário
 TABLE_BORDER_COLOR = "#E9ECEF"
 CHART_GRID_COLOR  = "#E9ECEF"
-KPI_BG_COLOR    = "#F8F9FA"      # Cinza claro p/ cards de KPI
 
 # --- COLUNAS PARA FORMATAÇÃO ---
 MONEY_COLS = {
@@ -48,27 +47,6 @@ def fmt_brl(v):
         return f"R$ {s}"
     except (ValueError, TypeError):
         return "R$ 0,00"
-
-def render_kpi_card(title, value, bg_color=KPI_BG_COLOR, icon=None, subtitle=None, dark_text=False):
-    icon_html = f"<div style='font-size: 2rem; margin-bottom: 0.5rem;'>{icon}</div>" if icon else ""
-    subtitle_html = f"<div class='kpi-card-subtitle'>{subtitle}</div>" if subtitle else ""
-    txt_color = TEXT_COLOR if dark_text else "#FFFFFF"
-    st.markdown(f"""
-        <div class="kpi-card-modern" style="background:{bg_color}; color:{txt_color};">
-            {icon_html}
-            <div class="kpi-card-value-modern">{value}</div>
-            <div class="kpi-card-title-modern">{title}</div>
-            {subtitle_html}
-        </div>
-    """, unsafe_allow_html=True)
-
-def render_report_metric(title, value):
-    st.markdown(f"""
-        <div class="report-metric-card">
-            <div class="report-metric-title">{title}</div>
-            <div class="report-metric-value">{value}</div>
-        </div>
-    """, unsafe_allow_html=True)
 
 def calculate_summary_metrics(df):
     summary = {"roi_pct": 0, "break_even_month": "N/A", "total_investment": 0, "net_profit": 0}
@@ -434,17 +412,17 @@ def get_default_config():
             'revenue_per_module': 4500.0,
             'maintenance_per_module': 200.0,
             'monthly_land_plot_parcel': 200.0,
-            'land_value_per_module': 25000.0,
             'land_total_value': 120000.0,
             'land_down_payment_pct': 20.0,
             'land_installments': 120,
-            'land_interest_rate': 8.0
+            'land_interest_rate': 8.0,
+            'land_appreciation_rate': 5.0  # <-- CORREÇÃO: Adicionado aqui
         },
         'global': {
             'years': 15,
             'max_withdraw_value': 50000.0,
             'general_correction_rate': 5.0,
-            'land_appreciation_rate': 5.0,
+            'land_appreciation_rate': 5.0,  # <-- CORREÇÃO: Adicionado aqui
             'aportes': [],
             'retiradas': [],
             'fundos': []
@@ -457,11 +435,8 @@ if 'config' not in st.session_state:
 if 'simulation_df' not in st.session_state:
     st.session_state.simulation_df = pd.DataFrame()
 
-if 'comparison_df' not in st.session_state:
-    st.session_state.comparison_df = pd.DataFrame()
-
 if 'selected_strategy' not in st.session_state:
-    st.session_state.selected_strategy = None
+    st.session_state.selected_strategy = 'buy'
 
 # ---------------------------
 # Header (fiel à imagem)
@@ -591,7 +566,6 @@ with tab_config:
         with st.spinner("Calculando projeção..."):
             cache_key = compute_cache_key(st.session_state.config)
             st.session_state.simulation_df = simulate(st.session_state.config, 'buy', cache_key)
-            st.session_state.selected_strategy = 'buy'
         st.success("Simulação concluída!")
 
 # ---------------------------
@@ -675,13 +649,13 @@ with tab_results:
         # KPIs principais
         k1, k2, k3, k4 = st.columns(4)
         with k1:
-            render_kpi_card("Patrimônio Líquido", fmt_brl(final['Patrimônio Líquido']), SUCCESS_COLOR, "💰")
+            st.metric("Patrimônio Líquido", fmt_brl(final['Patrimônio Líquido']))
         with k2:
-            render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
+            st.metric("Investimento Total", fmt_brl(final['Investimento Total Acumulado']))
         with k3:
-            render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
+            st.metric("ROI Total", f"{summary['roi_pct']:.1f}%")
         with k4:
-            render_kpi_card("Ponto de Equilíbrio", f"Mês {summary['break_even_month']}", WARNING_COLOR, "⚖️")
+            st.metric("Ponto de Equilíbrio", f"Mês {summary['break_even_month']}")
 
         # Gráficos
         g1, g2 = st.columns(2)
