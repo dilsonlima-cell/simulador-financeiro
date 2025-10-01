@@ -547,80 +547,6 @@ with tab_config:
             <span>{fmt_brl(invest_inicial)}</span>
         </div>
     """, unsafe_allow_html=True)
-    # Eventos Financeiros em 3 cards
-    e1, e2, e3 = st.columns(3)
-    with e1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### 💸 Aportes de Investimento")
-        colA, colB = st.columns([1,2])
-        with colA:
-            ap_mes = st.number_input("Mês", 1, g['years']*12, 1, key="aporte_mes")
-        with colB:
-            ap_val = st.number_input("Valor (R$)", 0.0, key="aporte_valor")
-        if st.button("➕ Adicionar Aporte", key="btn_add_aporte"):
-            # Garantir que a lista existe
-            if 'contributions' not in g:
-                g['contributions'] = []
-            g['contributions'].append({"mes": ap_mes, "valor": ap_val})
-            st.rerun()
-        # Garantir que a lista existe antes de iterar
-        if 'contributions' in g and g['contributions']:
-            st.markdown("**Aportes agendados:**")
-            for i, a in enumerate(g['contributions']):
-                cA, cB, cC = st.columns([3,2,1])
-                cA.write(f"Mês {a['mes']}")
-                cB.write(fmt_brl(a['valor']))
-                if cC.button("🗑️", key=f"del_aporte_{i}"):
-                    g['contributions'].pop(i); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-    with e2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### ↩️ Retiradas")
-        colA, colB = st.columns([1,2])
-        with colA:
-            r_mes = st.number_input("Mês inicial", 1, g['years']*12, 1, key="retirada_mes")
-        with colB:
-            r_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="retirada_pct")
-        if st.button("➕ Adicionar Retirada", key="btn_add_retirada"):
-            # Garantir que a lista existe
-            if 'withdrawals' not in g:
-                g['withdrawals'] = []
-            g['withdrawals'].append({"mes": r_mes, "percentual": r_pct})
-            st.rerun()
-        # Garantir que a lista existe antes de iterar
-        if 'withdrawals' in g and g['withdrawals']:
-            st.markdown("**Regras ativas:**")
-            for i, r_ in enumerate(g['withdrawals']):
-                cA, cB, cC = st.columns([3,2,1])
-                cA.write(f"A partir do mês {r_['mes']}")
-                cB.write(f"{r_['percentual']}%")
-                if cC.button("🗑️", key=f"del_retirada_{i}"):
-                    g['withdrawals'].pop(i); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-    with e3:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### 🧱 Fundo de Reserva")
-        colA, colB = st.columns([1,2])
-        with colA:
-            f_mes = st.number_input("Mês inicial", 1, g['years']*12, 1, key="fundo_mes")
-        with colB:
-            f_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="fundo_pct")
-        if st.button("➕ Adicionar Fundo", key="btn_add_fundo"):
-            # Garantir que a lista existe
-            if 'reserve_funds' not in g:
-                g['reserve_funds'] = []
-            g['reserve_funds'].append({"mes": f_mes, "percentual": f_pct})
-            st.rerun()
-        # Garantir que a lista existe antes de iterar
-        if 'reserve_funds' in g and g['reserve_funds']:
-            st.markdown("**Regras ativas:**")
-            for i, f in enumerate(g['reserve_funds']):
-                cA, cB, cC = st.columns([3,2,1])
-                cA.write(f"A partir do mês {f['mes']}")
-                cB.write(f"{f['percentual']}%")
-                if cC.button("🗑️", key=f"del_fundo_{i}"):
-                    g['reserve_funds'].pop(i); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     # Ação de simular
     if st.button("🚀 Executar Simulação", type="primary", use_container_width=True):
         with st.spinner("Calculando projeção..."):
@@ -860,17 +786,18 @@ with tab_data:
                 p = filtered.iloc[0] # Pegar a primeira linha (deve ser apenas uma)
                 r = st.columns(4)
                 with r[0]:
-                    render_report_metric("Módulos Ativos", int(p['Módulos Ativos'])) # Passa o número, não a string formatada
-                    render_report_metric("Patrimônio Líquido", p['Patrimônio Líquido']) # Passa o número, não a string formatada
+                    # Passar o valor numérico original, não a string formatada
+                    render_report_metric("Módulos Ativos", int(p['Módulos Ativos']))
+                    render_report_metric("Patrimônio Líquido", p['Patrimônio Líquido'])
                 with r[1]:
-                    render_report_metric("Caixa no Mês", p['Caixa (Final Mês)']) # Passa o número, não a string formatada
-                    render_report_metric("Investimento Total", p['Investimento Total Acumulado']) # Passa o número, não a string formatada
+                    render_report_metric("Caixa no Mês", p['Caixa (Final Mês)'])
+                    render_report_metric("Investimento Total", p['Investimento Total Acumulado'])
                 with r[2]:
-                    render_report_metric("Fundo (Mês)", p['Fundo (Mês)']) # Passa o número, não a string formatada
-                    render_report_metric("Fundo Acumulado", p['Fundo Acumulado']) # Passa o número, não a string formatada
+                    render_report_metric("Fundo (Mês)", p['Fundo (Mês)'])
+                    render_report_metric("Fundo Acumulado", p['Fundo Acumulado'])
                 with r[3]:
-                    render_report_metric("Retirada (Mês)", p['Retirada (Mês)']) # Passa o número, não a string formatada
-                    render_report_metric("Retiradas Acumuladas", p['Retiradas Acumuladas']) # Passa o número, não a string formatada
+                    render_report_metric("Retirada (Mês)", p['Retirada (Mês)'])
+                    render_report_metric("Retiradas Acumuladas", p['Retiradas Acumuladas'])
         st.markdown('</div>', unsafe_allow_html=True)
         # Tabela completa selecionável + download
         with st.expander("Clique para ver a Tabela Completa da Simulação"):
