@@ -480,7 +480,6 @@ tab_dashboard, tab_config, tab_sheet = st.tabs(["Dashboard", "Configurações", 
 with tab_config:
     cfg = st.session_state.config
     st.markdown("<h3 class='section-title'>Configuração do Investimento</h3>", unsafe_allow_html=True)
-
     # Parâmetros iniciais: 3 cards lado a lado
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -488,7 +487,6 @@ with tab_config:
         st.markdown("#### 🏢 Terreno Alugado")
         r = cfg['rented']
         r['modules_init'] = st.number_input("Módulos iniciais (alugados)", 0, value=int(r['modules_init']), key="rent_mod_init")
-
         # --- Correção aplicada ---
         try:
             current_rent_cost = float(r['cost_per_module'])
@@ -496,7 +494,6 @@ with tab_config:
             current_rent_cost = 75000.0
         r['cost_per_module'] = st.number_input("Custo por módulo (R$)", 0.0, value=current_rent_cost, format="%.2f", key="rent_cost_mod")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_rent_rev = float(r['revenue_per_module'])
@@ -504,7 +501,6 @@ with tab_config:
             current_rent_rev = 4500.0
         r['revenue_per_module'] = st.number_input("Receita mensal/módulo (R$)", 0.0, value=current_rent_rev, format="%.2f", key="rent_rev_mod")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_rent_maint = float(r['maintenance_per_module'])
@@ -512,7 +508,6 @@ with tab_config:
             current_rent_maint = 200.0
         r['maintenance_per_module'] = st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=current_rent_maint, format="%.2f", key="rent_maint_mod")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_rent_base = float(r['rent_value'])
@@ -520,7 +515,6 @@ with tab_config:
             current_rent_base = 750.0
         r['rent_value'] = st.number_input("Aluguel mensal fixo (R$)", 0.0, value=current_rent_base, format="%.2f", key="rent_base_rent")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_rent_new = float(r['rent_per_new_module'])
@@ -528,15 +522,12 @@ with tab_config:
             current_rent_new = 950.0
         r['rent_per_new_module'] = st.number_input("Custo aluguel por novo módulo (R$)", 0.0, value=current_rent_new, format="%.2f", key="rent_new_rent")
         # ---
-
         st.markdown('</div>', unsafe_allow_html=True)
-
     with c2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 🏠 Terreno Próprio")
         o = cfg['owned']
         st.markdown("##### Financiamento do Terreno Inicial")
-
         # --- Correção aplicada ---
         try:
             current_land_val = float(o['land_total_value'])
@@ -544,7 +535,6 @@ with tab_config:
             current_land_val = 0.0
         o['land_total_value'] = st.number_input("Valor total do terreno (R$)", 0.0, value=current_land_val, format="%.2f", key="own_total_land_val")
         # ---
-
         if o['land_total_value'] > 0:
             # --- Correção aplicada ---
             try:
@@ -553,9 +543,7 @@ with tab_config:
                 current_land_down_pay = 20.0
             o['land_down_payment_pct'] = st.number_input("Entrada (%)", 0.0, 100.0, value=current_land_down_pay, format="%.1f", key="own_down_pay")
             # ---
-
             o['land_installments'] = st.number_input("Parcelas (qtd.)", 1, 480, value=int(o['land_installments']), key="own_install")
-
             # --- Correção aplicada ---
             try:
                 current_land_interest = float(o.get('land_interest_rate', 8.0))
@@ -563,7 +551,6 @@ with tab_config:
                 current_land_interest = 8.0
             o['land_interest_rate'] = st.number_input("Juros anual (%)", 0.0, 50.0, value=current_land_interest, format="%.1f", key="own_interest")
             # ---
-
             valor_entrada = o['land_total_value'] * (o['land_down_payment_pct'] / 100.0)
             valor_financiado = o['land_total_value'] - valor_entrada
             taxa_juros_mensal = (o['land_interest_rate'] / 100.0) / 12
@@ -572,10 +559,8 @@ with tab_config:
             cA, cB = st.columns(2)
             with cA: st.metric("Valor da Entrada", fmt_brl(valor_entrada))
             with cB: st.metric("1ª Parcela Estimada", fmt_brl(primeira_parcela))
-
         st.markdown("##### Módulos Próprios")
         o['modules_init'] = st.number_input("Módulos iniciais (próprios)", 0, value=int(o['modules_init']), key="own_mod_init")
-
         # --- Correção aplicada ---
         try:
             current_own_cost = float(o['cost_per_module'])
@@ -583,7 +568,6 @@ with tab_config:
             current_own_cost = 75000.0
         o['cost_per_module'] = st.number_input("Custo por módulo (R$)", 0.0, value=current_own_cost, format="%.2f", key="own_cost_mod")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_own_parcel = float(o['monthly_land_plot_parcel'])
@@ -591,7 +575,6 @@ with tab_config:
             current_own_parcel = 200.0
         o['monthly_land_plot_parcel'] = st.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=current_own_parcel, format="%.2f", key="own_land_parcel")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_own_rev = float(o['revenue_per_module'])
@@ -599,7 +582,6 @@ with tab_config:
             current_own_rev = 4500.0
         o['revenue_per_module'] = st.number_input("Receita mensal/módulo (R$)", 0.0, value=current_own_rev, format="%.2f", key="own_rev_mod")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_own_maint = float(o['maintenance_per_module'])
@@ -607,15 +589,12 @@ with tab_config:
             current_own_maint = 200.0
         o['maintenance_per_module'] = st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=current_own_maint, format="%.2f", key="own_maint_mod")
         # ---
-
         st.markdown('</div>', unsafe_allow_html=True)
-
     with c3:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 🌐 Parâmetros Globais")
         g = cfg['global']
         g['years'] = st.number_input("Anos de projeção", 1, 50, value=int(g['years']), key="glob_years")
-
         # --- Correção aplicada ---
         try:
             current_glob_correction = float(g['general_correction_rate'])
@@ -623,7 +602,6 @@ with tab_config:
             current_glob_correction = 5.0
         g['general_correction_rate'] = st.number_input("Correção anual geral (%)", 0.0, 50.0, value=current_glob_correction, format="%.1f", key="glob_correction")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_glob_max_withdraw = float(g['max_withdraw_value'])
@@ -631,7 +609,6 @@ with tab_config:
             current_glob_max_withdraw = 50000.0
         g['max_withdraw_value'] = st.number_input("Retirada máxima mensal (R$)", 0.0, value=current_glob_max_withdraw, format="%.2f", key="glob_max_withdraw")
         # ---
-
         # --- Correção aplicada ---
         try:
             current_glob_land_appr = float(g.get('land_appreciation_rate', 3.0))
@@ -639,7 +616,6 @@ with tab_config:
             current_glob_land_appr = 3.0
         g['land_appreciation_rate'] = st.number_input("Valorização anual do terreno (%)", 0.0, 50.0, value=current_glob_land_appr, format="%.1f", key="glob_land_appr")
         # ---
-
         st.markdown("##### 🔄 Estratégia de Reinvestimento")
         reinvestment_strategy = st.selectbox(
             "Como reinvestir o lucro?",
@@ -648,7 +624,6 @@ with tab_config:
             key="reinvestment_strategy"
         )
         st.markdown('</div>', unsafe_allow_html=True)
-
     # Faixa de Investimento Inicial Total
     invest_inicial = compute_initial_investment_total(cfg)
     st.markdown(f"""
@@ -657,7 +632,6 @@ with tab_config:
             <span>{fmt_brl(invest_inicial)}</span>
         </div>
     """, unsafe_allow_html=True)
-
     # Eventos Financeiros em 3 cards (Aqui, dentro da aba Configurações)
     e1, e2, e3 = st.columns(3)
     with e1:
@@ -669,9 +643,13 @@ with tab_config:
         with colB:
             ap_val = st.number_input("Valor (R$)", 0.0, key="aporte_valor")
         if st.button("➕ Adicionar Aporte", key="btn_add_aporte"):
+            # Garante que a chave 'aportes' exista
+            if 'aportes' not in g:
+                g['aportes'] = []
             g['aportes'].append({"mes": ap_mes, "valor": ap_val})
             st.rerun()
-        if g['aportes']:
+        # Verifica se a chave 'aportes' existe e é uma lista
+        if 'aportes' in g and isinstance(g['aportes'], list) and len(g['aportes']) > 0:
             st.markdown("**Aportes agendados:**")
             for i, a in enumerate(g['aportes']):
                 cA, cB, cC = st.columns([3,2,1])
@@ -680,7 +658,6 @@ with tab_config:
                 if cC.button("🗑️", key=f"del_aporte_{i}"):
                     g['aportes'].pop(i); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
     with e2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### ↩️ Retiradas")
@@ -690,9 +667,13 @@ with tab_config:
         with colB:
             r_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="retirada_pct")
         if st.button("➕ Adicionar Retirada", key="btn_add_retirada"):
+            # Garante que a chave 'retiradas' exista
+            if 'retiradas' not in g:
+                g['retiradas'] = []
             g['retiradas'].append({"mes": r_mes, "percentual": r_pct})
             st.rerun()
-        if g['retiradas']:
+        # Verifica se a chave 'retiradas' existe e é uma lista
+        if 'retiradas' in g and isinstance(g['retiradas'], list) and len(g['retiradas']) > 0:
             st.markdown("**Regras ativas:**")
             for i, r_ in enumerate(g['retiradas']):
                 cA, cB, cC = st.columns([3,2,1])
@@ -701,7 +682,6 @@ with tab_config:
                 if cC.button("🗑️", key=f"del_retirada_{i}"):
                     g['retiradas'].pop(i); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
     with e3:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 🧱 Fundo de Reserva")
@@ -711,9 +691,13 @@ with tab_config:
         with colB:
             f_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="fundo_pct")
         if st.button("➕ Adicionar Fundo", key="btn_add_fundo"):
+            # Garante que a chave 'fundos' exista
+            if 'fundos' not in g:
+                g['fundos'] = []
             g['fundos'].append({"mes": f_mes, "percentual": f_pct})
             st.rerun()
-        if g['fundos']:
+        # Verifica se a chave 'fundos' existe e é uma lista
+        if 'fundos' in g and isinstance(g['fundos'], list) and len(g['fundos']) > 0:
             st.markdown("**Regras ativas:**")
             for i, f in enumerate(g['fundos']):
                 cA, cB, cC = st.columns([3,2,1])
@@ -722,7 +706,6 @@ with tab_config:
                 if cC.button("🗑️", key=f"del_fundo_{i}"):
                     g['fundos'].pop(i); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
     # Ação de simular
     if st.button("🚀 Executar Simulação", type="primary", use_container_width=True):
         with st.spinner("Calculando projeção..."):
@@ -949,3 +932,4 @@ with tab_sheet:
                 file_name=f"relatorio_simulacao_{slug(selected_strategy or 'geral')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
