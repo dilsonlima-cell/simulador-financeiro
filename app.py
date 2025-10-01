@@ -1,5 +1,5 @@
 # app.py
-# Simulador Modular — v10.3 com correção de reinvestimento + persistência de inputs
+# Simulador Modular — v10.4 com correção de distribuição + paleta azul refinada
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,20 +11,21 @@ import json
 import hashlib
 from copy import deepcopy
 
-# --- PALETA DE CORES ---
-PRIMARY_COLOR   = "#F5A623"
-SECONDARY_COLOR = "#0EA5E9"
-SUCCESS_COLOR   = "#10B981"
-DANGER_COLOR    = "#EF4444"
-WARNING_COLOR   = "#F59E0B"
-INFO_COLOR      = "#3B82F6"
-APP_BG          = "#E6F1FB"
-SIDEBAR_BG      = "#D4E6FA"
-CARD_COLOR      = "#FFFFFF"
-TEXT_COLOR      = "#0F172A"
-MUTED_TEXT_COLOR = "#334155"
+# --- PALETA DE CORES ATUALIZADA ---
+PRIMARY_COLOR   = "#F5A623"      # Botões primários
+SECONDARY_COLOR = "#0EA5E9"      # Azul claro (para gráficos)
+SUCCESS_COLOR   = "#10B981"      # Verde sucesso
+DANGER_COLOR    = "#EF4444"      # Vermelho erro
+WARNING_COLOR   = "#F59E0B"      # Amarelo alerta
+INFO_COLOR      = "#3B82F6"      # Azul info
+APP_BG          = "#E6F1FB"      # Fundo claro do app
+SIDEBAR_BG      = "#D4E6FA"      # Sidebar
+CARD_COLOR      = "#FFFFFF"      # Cards brancos
+TEXT_COLOR      = "#0F172A"      # Texto escuro
+MUTED_TEXT_COLOR = "#334155"     # Texto secundário
 TABLE_BORDER_COLOR = "#CBD5E1"
 CHART_GRID_COLOR  = "#E2E8F0"
+KPI_BG_COLOR    = "#4A8BC9"      # Azul médio para cards de KPI (destaque)
 
 # --- COLUNAS PARA FORMATAÇÃO ---
 MONEY_COLS = {
@@ -53,7 +54,7 @@ def fmt_brl(v):
     except (ValueError, TypeError):
         return "R$ 0,00"
 
-def render_kpi_card(title, value, bg_color, icon=None, subtitle=None, dark_text=False):
+def render_kpi_card(title, value, bg_color=KPI_BG_COLOR, icon=None, subtitle=None, dark_text=False):
     icon_html = f"<div style='font-size: 2rem; margin-bottom: 0.5rem;'>{icon}</div>" if icon else ""
     subtitle_html = f"<div class='kpi-card-subtitle'>{subtitle}</div>" if subtitle else ""
     txt_color = "#0F172A" if dark_text else "#FFFFFF"
@@ -156,12 +157,12 @@ st.markdown(f"""
         .card {{ background: {CARD_COLOR}; border-radius: 16px; padding: 1.5rem; border: 1px solid {TABLE_BORDER_COLOR}; margin-bottom: 1.25rem; }}
         .kpi-card-modern {{
             border-radius: 20px; padding: 1.5rem 1.25rem; height: 100%; text-align: center;
-            transition: transform 0.3s ease; background: linear-gradient(135deg, {PRIMARY_COLOR} 0%, {SECONDARY_COLOR} 100%);
+            transition: transform 0.3s ease; background: {KPI_BG_COLOR}; /* Azul médio */
         }}
         .kpi-card-modern:hover {{ transform: translateY(-5px); }}
-        .kpi-card-title-modern {{ font-size: 0.95rem; font-weight: 600; opacity: .95; margin-top: 0.5rem; }}
-        .kpi-card-value-modern {{ font-size: 2rem; font-weight: 800; line-height: 1.1; }}
-        .kpi-card-subtitle {{ font-size: 0.85rem; opacity: .9; margin-top: 0.35rem; }}
+        .kpi-card-title-modern {{ font-size: 0.95rem; font-weight: 600; opacity: .95; margin-top: 0.5rem; color: white; }}
+        .kpi-card-value-modern {{ font-size: 2rem; font-weight: 800; line-height: 1.1; color: white; }}
+        .kpi-card-subtitle {{ font-size: 0.85rem; opacity: .9; margin-top: 0.35rem; color: white; }}
         .report-metric-card {{ background: {CARD_COLOR}; border-radius: 8px; padding: 0.75rem 1rem; border: 1px solid {TABLE_BORDER_COLOR}; text-align: center; margin-bottom: 0.5rem; }}
         .report-metric-title {{ font-size: 0.8rem; color: {MUTED_TEXT_COLOR}; margin-bottom: 0.25rem; text-transform: uppercase; font-weight: 600; }}
         .report-metric-value {{ font-size: 1.25rem; font-weight: 700; color: {TEXT_COLOR}; }}
@@ -178,7 +179,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Motor de Simulação (v10.3 — com reinvestimento do excesso)
+# Motor de Simulação (v10.4 — com correção de distribuição e reinvestimento)
 # ---------------------------
 @st.cache_data(show_spinner=False)
 def simulate(_config, reinvestment_strategy, cache_key: str):
@@ -262,20 +263,22 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         if lucro_operacional > 0:
             base_distribuicao = lucro_operacional
 
-            # Calcular retirada e fundo conforme regras
+            # Calcular percentuais de retirada e fundo
             retirada_potencial = sum(base_distribuicao * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
             fundo_potencial = sum(base_distribuicao * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
 
             # Aplicar limite máximo de retirada
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
-                # Reduzir retirada ao limite; o EXCESSO PERMANECE NO CAIXA (para reinvestimento)
+                # Reduzir a retirada para o limite; o excesso vai para reinvestimento (não para fundo)
+                excesso = retirada_potencial - cfg_global['max_withdraw_value']
                 retirada_mes_efetiva = cfg_global['max_withdraw_value']
-                fundo_mes_total = fundo_potencial  # apenas o percentual do fundo
+                fundo_mes_total = fundo_potencial  # mantém apenas o percentual do fundo
+                # O excesso permanece no caixa → será usado para reinvestimento
             else:
                 retirada_mes_efetiva = retirada_potencial
                 fundo_mes_total = fundo_potencial
 
-            # Verificar se há caixa suficiente para distribuir
+            # Verificar se a distribuição total excede o caixa disponível
             total_distribuicao = retirada_mes_efetiva + fundo_mes_total
             if total_distribuicao > caixa:
                 if caixa > 0:
@@ -286,7 +289,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                     retirada_mes_efetiva = 0.0
                     fundo_mes_total = 0.0
 
-        # Atualizar caixa com distribuições efetivas
+        # Atualizar caixa com as distribuições efetivas
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
@@ -459,7 +462,7 @@ with st.sidebar:
     st.markdown("<p style='color: #334155; font-size: 0.85rem;'>Desenvolvido com Streamlit</p>", unsafe_allow_html=True)
 
 # ---------------------------
-# Página de Configurações — COM PERSISTÊNCIA DE INPUTS
+# Página de Configurações
 # ---------------------------
 if st.session_state.active_page == 'Configurações':
     st.markdown("<h1 class='gradient-header'>Configurações de Investimento</h1>", unsafe_allow_html=True)
@@ -541,37 +544,21 @@ if st.session_state.active_page == 'Configurações':
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Seção 5: Eventos Financeiros — COM PERSISTÊNCIA DOS VALORES DE INPUT
+    # Seção 5: Eventos Financeiros
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">📅 Eventos Financeiros</div>', unsafe_allow_html=True)
-
-    # Inicializa os valores temporários no session_state para persistência
-    if 'temp_aporte_mes' not in st.session_state:
-        st.session_state.temp_aporte_mes = 1
-    if 'temp_aporte_valor' not in st.session_state:
-        st.session_state.temp_aporte_valor = 0.0
-    if 'temp_retirada_mes' not in st.session_state:
-        st.session_state.temp_retirada_mes = 1
-    if 'temp_retirada_pct' not in st.session_state:
-        st.session_state.temp_retirada_pct = 0.0
-    if 'temp_fundo_mes' not in st.session_state:
-        st.session_state.temp_fundo_mes = 1
-    if 'temp_fundo_pct' not in st.session_state:
-        st.session_state.temp_fundo_pct = 0.0
-
     tab_aportes, tab_retiradas, tab_fundos = st.tabs(["Aportes", "Retiradas", "Fundos"])
 
     with tab_aportes:
         st.markdown("**Aportes de Capital (opcional)**")
         aporte_cols = st.columns([1, 2, 1])
         with aporte_cols[0]:
-            st.session_state.temp_aporte_mes = st.number_input("Mês do aporte", 1, cfg_g['years'] * 12, st.session_state.temp_aporte_mes, key="aporte_mes_input")
+            aporte_mes = st.number_input("Mês do aporte", 1, cfg_g['years'] * 12, 1, key="aporte_mes")
         with aporte_cols[1]:
-            st.session_state.temp_aporte_valor = st.number_input("Valor (R$)", 0.0, st.session_state.temp_aporte_valor, key="aporte_valor_input")
+            aporte_valor = st.number_input("Valor (R$)", 0.0, key="aporte_valor")
         with aporte_cols[2]:
             if st.button("➕ Adicionar Aporte"):
-                cfg_g['aportes'].append({"mes": st.session_state.temp_aporte_mes, "valor": st.session_state.temp_aporte_valor})
-                st.session_state.temp_aporte_valor = 0.0  # reset opcional
+                cfg_g['aportes'].append({"mes": aporte_mes, "valor": aporte_valor})
                 st.rerun()
 
         if cfg_g['aportes']:
@@ -588,13 +575,12 @@ if st.session_state.active_page == 'Configurações':
         st.markdown("**Regras de Retirada**")
         retirada_cols = st.columns([1, 2, 1])
         with retirada_cols[0]:
-            st.session_state.temp_retirada_mes = st.number_input("Mês inicial", 1, cfg_g['years'] * 12, st.session_state.temp_retirada_mes, key="retirada_mes_input")
+            retirada_mes = st.number_input("Mês inicial", 1, cfg_g['years'] * 12, 1, key="retirada_mes")
         with retirada_cols[1]:
-            st.session_state.temp_retirada_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, st.session_state.temp_retirada_pct, key="retirada_pct_input")
+            retirada_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="retirada_pct")
         with retirada_cols[2]:
             if st.button("➕ Adicionar Retirada"):
-                cfg_g['retiradas'].append({"mes": st.session_state.temp_retirada_mes, "percentual": st.session_state.temp_retirada_pct})
-                st.session_state.temp_retirada_pct = 0.0
+                cfg_g['retiradas'].append({"mes": retirada_mes, "percentual": retirada_pct})
                 st.rerun()
 
         if cfg_g['retiradas']:
@@ -611,13 +597,12 @@ if st.session_state.active_page == 'Configurações':
         st.markdown("**Regras de Fundo de Reserva**")
         fundo_cols = st.columns([1, 2, 1])
         with fundo_cols[0]:
-            st.session_state.temp_fundo_mes = st.number_input("Mês inicial", 1, cfg_g['years'] * 12, st.session_state.temp_fundo_mes, key="fundo_mes_input")
+            fundo_mes = st.number_input("Mês inicial", 1, cfg_g['years'] * 12, 1, key="fundo_mes")
         with fundo_cols[1]:
-            st.session_state.temp_fundo_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, st.session_state.temp_fundo_pct, key="fundo_pct_input")
+            fundo_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="fundo_pct")
         with fundo_cols[2]:
             if st.button("➕ Adicionar Fundo"):
-                cfg_g['fundos'].append({"mes": st.session_state.temp_fundo_mes, "percentual": st.session_state.temp_fundo_pct})
-                st.session_state.temp_fundo_pct = 0.0
+                cfg_g['fundos'].append({"mes": fundo_mes, "percentual": fundo_pct})
                 st.rerun()
 
         if cfg_g['fundos']:
