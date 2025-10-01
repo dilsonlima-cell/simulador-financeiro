@@ -121,7 +121,6 @@ def compute_initial_investment_total(cfg):
 # Config da página + CSS (fiel à imagem)
 # ---------------------------
 st.set_page_config(page_title="Simulador Financeiro de Investimentos", layout="wide", initial_sidebar_state="collapsed")
-
 st.markdown(f"""
     <style>
         .main .block-container {{ padding: 0 1.25rem 2rem; max-width: 1400px; }}
@@ -444,21 +443,18 @@ def get_default_config():
             'max_withdraw_value': 50000.0,
             'general_correction_rate': 5.0,
             'land_appreciation_rate': 3.0,
-            'contributions': [],
-            'withdrawals': [],
-            'reserve_funds': []
+            'contributions': [],  # Garantido como lista
+            'withdrawals': [],    # Garantido como lista
+            'reserve_funds': []   # Garantido como lista
         }
     }
 
 if 'config' not in st.session_state:
     st.session_state.config = get_default_config()
-
 if 'simulation_df' not in st.session_state:
     st.session_state.simulation_df = pd.DataFrame()
-
 if 'comparison_df' not in st.session_state:
     st.session_state.comparison_df = pd.DataFrame()
-
 if 'selected_strategy' not in st.session_state:
     st.session_state.selected_strategy = 'buy'
 
@@ -562,9 +558,13 @@ with tab_config:
         with colB:
             ap_val = st.number_input("Valor (R$)", 0.0, key="aporte_valor")
         if st.button("➕ Adicionar Aporte", key="btn_add_aporte"):
+            # Garantir que a lista existe
+            if 'contributions' not in g:
+                g['contributions'] = []
             g['contributions'].append({"mes": ap_mes, "valor": ap_val})
             st.rerun()
-        if g['contributions']:
+        # Garantir que a lista existe antes de iterar
+        if 'contributions' in g and g['contributions']:
             st.markdown("**Aportes agendados:**")
             for i, a in enumerate(g['contributions']):
                 cA, cB, cC = st.columns([3,2,1])
@@ -582,9 +582,13 @@ with tab_config:
         with colB:
             r_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="retirada_pct")
         if st.button("➕ Adicionar Retirada", key="btn_add_retirada"):
+            # Garantir que a lista existe
+            if 'withdrawals' not in g:
+                g['withdrawals'] = []
             g['withdrawals'].append({"mes": r_mes, "percentual": r_pct})
             st.rerun()
-        if g['withdrawals']:
+        # Garantir que a lista existe antes de iterar
+        if 'withdrawals' in g and g['withdrawals']:
             st.markdown("**Regras ativas:**")
             for i, r_ in enumerate(g['withdrawals']):
                 cA, cB, cC = st.columns([3,2,1])
@@ -602,9 +606,13 @@ with tab_config:
         with colB:
             f_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="fundo_pct")
         if st.button("➕ Adicionar Fundo", key="btn_add_fundo"):
+            # Garantir que a lista existe
+            if 'reserve_funds' not in g:
+                g['reserve_funds'] = []
             g['reserve_funds'].append({"mes": f_mes, "percentual": f_pct})
             st.rerun()
-        if g['reserve_funds']:
+        # Garantir que a lista existe antes de iterar
+        if 'reserve_funds' in g and g['reserve_funds']:
             st.markdown("**Regras ativas:**")
             for i, f in enumerate(g['reserve_funds']):
                 cA, cB, cC = st.columns([3,2,1])
@@ -628,6 +636,14 @@ with tab_transactions:
     st.markdown("<h3 class='section-title'>💰 Gerenciador de Transações</h3>", unsafe_allow_html=True)
     cfg = st.session_state.config
     g = cfg['global']
+    
+    # Garantir que as listas existem
+    if 'contributions' not in g:
+        g['contributions'] = []
+    if 'withdrawals' not in g:
+        g['withdrawals'] = []
+    if 'reserve_funds' not in g:
+        g['reserve_funds'] = []
 
     st.markdown("#### 💸 Aportes de Investimento")
     colA, colB = st.columns([1,2])
@@ -646,9 +662,7 @@ with tab_transactions:
             cB.write(fmt_brl(a['valor']))
             if cC.button("🗑️", key=f"trans_del_aporte_{i}"):
                 g['contributions'].pop(i); st.rerun()
-
     st.markdown("---")
-
     st.markdown("#### ↩️ Retiradas")
     colA, colB = st.columns([1,2])
     with colA:
@@ -666,9 +680,7 @@ with tab_transactions:
             cB.write(f"{r_['percentual']}%")
             if cC.button("🗑️", key=f"trans_del_retirada_{i}"):
                 g['withdrawals'].pop(i); st.rerun()
-
     st.markdown("---")
-
     st.markdown("#### 🧱 Fundo de Reserva")
     colA, colB = st.columns([1,2])
     with colA:
