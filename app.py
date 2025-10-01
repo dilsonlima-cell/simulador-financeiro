@@ -17,7 +17,7 @@ DANGER_COLOR    = "#DC3545"      # Vermelho erro
 WARNING_COLOR   = "#FFC107"      # Alerta amarelo
 INFO_COLOR      = "#17A2B8"      # Informações azuis
 APP_BG          = "#FFFFFF"      # Fundo branco da página
-CARD_COLOR      = "#FFFFFF"      # Fundo branco dos cards
+CARD_COLOR      = "#FFFFFF"      # Fundo blanco dos cards
 TEXT_COLOR      = "#212529"      # Texto escuro principal
 MUTED_TEXT_COLOR= "#6C757D"      # Texto cinza secundário
 TABLE_BORDER_COLOR = "#E9ECEF"
@@ -232,7 +232,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Motor de Simulação (v11)
+# Motor de Simulação
 # ---------------------------
 @st.cache_data(show_spinner=False)
 def simulate(_config, reinvestment_strategy, cache_key: str):
@@ -252,7 +252,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     historical_value_owned  = modules_owned  * cfg_owned['cost_per_module']
     fundo_ac = 0.0
     retiradas_ac = 0.0
-    compra_intercalada_counter = 0
     correction_rate_pct = cfg_global.get('general_correction_rate', 0.0) / 100.0
     land_appreciation_rate_pct = cfg_global.get('land_appreciation_rate', 3.0) / 100.0
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
@@ -265,7 +264,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     parcela_p_novo_terreno    = cfg_owned['monthly_land_plot_parcel']
     aluguel_mensal_corrente = cfg_rented['rent_value'] + (cfg_rented['modules_init'] * cfg_rented['rent_per_new_module'])
     parcelas_terrenos_novos_mensal_corrente = 0.0
-    parcela_terreno_inicial_atual = 0.0
     saldo_financiamento_terreno = 0.0
     equity_terreno_inicial = 0.0
     juros_acumulados = 0.0
@@ -378,7 +376,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                         modules_rented += novos_modulos_comprados
                         aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
             elif reinvestment_strategy == 'alternate':
-                alvo = 'buy' if ((modules_owned + modules_rented) % 2 == 0) else 'rent'
+                alvo = 'buy' if ((m // 12) % 2 == 0) else 'rent'
                 custo = custo_modulo_atual_owned if alvo == 'buy' else custo_modulo_atual_rented
                 if caixa >= custo > 0:
                     novos_modulos_comprados = int(caixa // custo)
@@ -409,7 +407,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             aluguel_p_novo_mod        *= correction_factor
         
         # Patrimônio
-        valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12))
+        valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12)) if valor_compra_terreno > 0 else 0
         patrimonio_terreno = valor_mercado_terreno - saldo_financiamento_terreno
         ativos  = historical_value_owned + historical_value_rented + caixa + fundo_ac + patrimonio_terreno
         passivos= saldo_financiamento_terreno
@@ -474,8 +472,7 @@ def get_default_config():
             'land_total_value': 0.0,
             'land_down_payment_pct': 20.0,
             'land_installments': 120,
-            'land_interest_rate': 8.0,
-            'land_appreciation_rate': 3.0
+            'land_interest_rate': 8.0
         },
         'global': {
             'years': 15,
@@ -509,7 +506,7 @@ with st.container():
     """, unsafe_allow_html=True)
 
 # ---------------------------
-# Abas (fiel à imagem: Configuração, Transações, Resultados, Dados)
+# Abas
 # ---------------------------
 tab_config, tab_transactions, tab_results, tab_data = st.tabs([
     "⚙️ Configurações",
@@ -525,7 +522,6 @@ with tab_config:
     cfg = st.session_state.config
     st.markdown("<h3 class='section-title'>⚙️ Configuração do Investimento</h3>", unsafe_allow_html=True)
     
-    # Parâmetros iniciais: 3 cards lado a lado
     c1, c2, c3 = st.columns(3)
     
     with c1:
@@ -597,7 +593,6 @@ with tab_config:
         </div>
     """, unsafe_allow_html=True)
     
-    # Ação de simular
     if st.button("🚀 Executar Simulação", type="primary", use_container_width=True):
         with st.spinner("Calculando projeção..."):
             cache_key = compute_cache_key(st.session_state.config)
@@ -758,7 +753,7 @@ with tab_results:
             "Patrimônio Líquido","Módulos Ativos","Retiradas Acumuladas",
             "Fundo Acumulado","Caixa (Final Mês)","Investimento Total Acumulado"
         ]
-        selected_metric = st.selectbox("Métrica para comparar", options=metric_options)
+        selected_metric = st.selectbox("Métrica para comparar", options=metric_options, key="result_metric")
         
         fig_comp = px.line(
             dfc, x="Mês", y=selected_metric, color='Estratégia',
@@ -868,7 +863,7 @@ with tab_data:
         else:
             df_analysis = base.copy()
         
-        # Análise por ponto no tempo
+        # Análise por ponto no tempo - CORREÇÃO APLICADA
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 📅 Análise por Ponto no Tempo")
         c1, c2 = st.columns(2)
@@ -886,17 +881,19 @@ with tab_data:
             filtered = subset[subset['Mês'] == sel_m]
             if not filtered.empty:
                 p = filtered.iloc[0] # Pegar a primeira linha (deve ser apenas uma)
-                r = st.columns(4)
-                with r[0]:
+                
+                # CORREÇÃO: Usando colunas nomeadas individualmente
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
                     render_report_metric("Módulos Ativos", int(p['Módulos Ativos']))
                     render_report_metric("Patrimônio Líquido", p['Patrimônio Líquido'])
-                with r[1]:
+                with col2:
                     render_report_metric("Caixa no Mês", p['Caixa (Final Mês)'])
                     render_report_metric("Investimento Total", p['Investimento Total Acumulado'])
-                with r[2]:
+                with col3:
                     render_report_metric("Fundo (Mês)", p['Fundo (Mês)'])
                     render_report_metric("Fundo Acumulado", p['Fundo Acumulado'])
-                with r[3]:
+                with col4:
                     render_report_metric("Retirada (Mês)", p['Retirada (Mês)'])
                     render_report_metric("Retiradas Acumuladas", p['Retiradas Acumuladas'])
         st.markdown('</div>', unsafe_allow_html=True)
