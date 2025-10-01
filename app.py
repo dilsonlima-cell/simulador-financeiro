@@ -443,9 +443,9 @@ def get_default_config():
             'max_withdraw_value': 50000.0,
             'general_correction_rate': 5.0,
             'land_appreciation_rate': 3.0,
-            'contributions': [],  # Garantido como lista
-            'withdrawals': [],    # Garantido como lista
-            'reserve_funds': []   # Garantido como lista
+            'contributions': [],
+            'withdrawals': [],
+            'reserve_funds': []
         }
     }
 
@@ -860,17 +860,17 @@ with tab_data:
                 p = filtered.iloc[0] # Pegar a primeira linha (deve ser apenas uma)
                 r = st.columns(4)
                 with r[0]:
-                    render_report_metric("Módulos Ativos", f"{int(p['Módulos Ativos'])}")
-                    render_report_metric("Patrimônio Líquido", fmt_brl(p['Patrimônio Líquido']))
+                    render_report_metric("Módulos Ativos", int(p['Módulos Ativos'])) # Passa o número, não a string formatada
+                    render_report_metric("Patrimônio Líquido", p['Patrimônio Líquido']) # Passa o número, não a string formatada
                 with r[1]:
-                    render_report_metric("Caixa no Mês", fmt_brl(p['Caixa (Final Mês)']))
-                    render_report_metric("Investimento Total", fmt_brl(p['Investimento Total Acumulado']))
+                    render_report_metric("Caixa no Mês", p['Caixa (Final Mês)']) # Passa o número, não a string formatada
+                    render_report_metric("Investimento Total", p['Investimento Total Acumulado']) # Passa o número, não a string formatada
                 with r[2]:
-                    render_report_metric("Fundo (Mês)", fmt_brl(p['Fundo (Mês)']))
-                    render_report_metric("Fundo Acumulado", fmt_brl(p['Fundo Acumulado']))
+                    render_report_metric("Fundo (Mês)", p['Fundo (Mês)']) # Passa o número, não a string formatada
+                    render_report_metric("Fundo Acumulado", p['Fundo Acumulado']) # Passa o número, não a string formatada
                 with r[3]:
-                    render_report_metric("Retirada (Mês)", fmt_brl(p['Retirada (Mês)']))
-                    render_report_metric("Retiradas Acumuladas", fmt_brl(p['Retiradas Acumuladas']))
+                    render_report_metric("Retirada (Mês)", p['Retirada (Mês)']) # Passa o número, não a string formatada
+                    render_report_metric("Retiradas Acumuladas", p['Retiradas Acumuladas']) # Passa o número, não a string formatada
         st.markdown('</div>', unsafe_allow_html=True)
         # Tabela completa selecionável + download
         with st.expander("Clique para ver a Tabela Completa da Simulação"):
@@ -905,9 +905,17 @@ with tab_data:
 
 # Função auxiliar para o cartão de métricas de relatório
 def render_report_metric(title, value):
+    # Esta função agora aceita o valor numérico original.
+    # Ela decide internamente se deve formatar como número inteiro ou moeda.
+    if isinstance(value, (int, np.integer)):
+        # Se for um número inteiro, exibe sem formatação de moeda.
+        formatted_value = f"{value:,}"  # Formata com separador de milhar
+    else:
+        # Caso contrário, assume que é um valor monetário e usa fmt_brl.
+        formatted_value = fmt_brl(value)
     st.markdown(f"""
         <div class="report-metric-card">
             <div class="report-metric-title">{title}</div>
-            <div class="report-metric-value">{value}</div>
+            <div class="report-metric-value">{formatted_value}</div>
         </div>
     """, unsafe_allow_html=True)
