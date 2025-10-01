@@ -10,7 +10,6 @@ import re
 import json
 import hashlib
 from copy import deepcopy
-
 # --- PALETA DE CORES (ajustada p/ telas anexas e contraste) ---
 PRIMARY_COLOR   = "#F59E0B"      # Laranja (primário / destaque)
 SECONDARY_COLOR = "#0EA5E9"      # Azul claro
@@ -25,7 +24,6 @@ MUTED_TEXT_COLOR= "#64748B"      # Texto secundário (cinza médio)
 TABLE_BORDER_COLOR = "#E2E8F0"
 CHART_GRID_COLOR  = "#E2E8F0"
 KPI_BG_COLOR    = "#4A8BC9"      # Azul médio p/ cards de KPI
-
 # --- COLUNAS PARA FORMATAÇÃO ---
 MONEY_COLS = {
     "Receita","Manutenção","Aluguel","Parcela Terreno Inicial","Parcelas Terrenos (Novos)","Gastos",
@@ -36,7 +34,6 @@ MONEY_COLS = {
     "Aluguel Acumulado","Parcelas Novas Acumuladas"
 }
 COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano"}
-
 # ---------------------------
 # Helpers
 # ---------------------------
@@ -49,7 +46,6 @@ def fmt_brl(v):
         return f"R$ {s}"
     except (ValueError, TypeError):
         return "R$ 0,00"
-
 def render_kpi_card(title, value, bg_color=KPI_BG_COLOR, icon=None, subtitle=None, dark_text=False):
     icon_html = f"<div style='font-size: 2rem; margin-bottom: 0.5rem;'>{icon}</div>" if icon else ""
     subtitle_html = f"<div class='kpi-card-subtitle'>{subtitle}</div>" if subtitle else ""
@@ -62,7 +58,6 @@ def render_kpi_card(title, value, bg_color=KPI_BG_COLOR, icon=None, subtitle=Non
             {subtitle_html}
         </div>
     """, unsafe_allow_html=True)
-
 def render_report_metric(title, value):
     st.markdown(f"""
         <div class="report-metric-card">
@@ -70,7 +65,6 @@ def render_report_metric(title, value):
             <div class="report-metric-value">{value}</div>
         </div>
     """, unsafe_allow_html=True)
-
 def calculate_summary_metrics(df):
     summary = {"roi_pct": 0, "break_even_month": "N/A", "total_investment": 0, "net_profit": 0}
     if df.empty:
@@ -86,7 +80,6 @@ def calculate_summary_metrics(df):
     if not break_even_df.empty:
         summary["break_even_month"] = int(break_even_df.iloc[0]['Mês'])
     return summary
-
 def df_to_excel_bytes(df: pd.DataFrame):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -98,12 +91,10 @@ def df_to_excel_bytes(df: pd.DataFrame):
             fmt = money_fmt if col in MONEY_COLS else None
             ws.set_column(i, i, width, fmt)
     return output.getvalue()
-
 def slug(s: str) -> str:
     s = s.lower()
     s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
     return s[:60]
-
 def apply_plot_theme(fig, title=None, h=420):
     fig.update_layout(
         title=dict(text=title or fig.layout.title.text, x=0.5, xanchor='center', font=dict(size=16, color=TEXT_COLOR)),
@@ -116,23 +107,19 @@ def apply_plot_theme(fig, title=None, h=420):
         yaxis=dict(gridcolor=CHART_GRID_COLOR, linecolor=TABLE_BORDER_COLOR, tickfont=dict(color=MUTED_TEXT_COLOR))
     )
     return fig
-
 def compute_cache_key(cfg: dict) -> str:
     payload = json.dumps(cfg, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.md5(payload.encode("utf-8")).hexdigest()
-
 def compute_initial_investment_total(cfg):
     r = cfg['rented']; o = cfg['owned']
     total = r['modules_init'] * r['cost_per_module'] + o['modules_init'] * o['cost_per_module']
     if o.get('land_total_value', 0) > 0:
         total += o['land_total_value'] * (o.get('land_down_payment_pct', 0) / 100.0)
     return total
-
 # ---------------------------
 # Config da página + CSS
 # ---------------------------
 st.set_page_config(page_title="Simulador Modular", layout="wide", initial_sidebar_state="collapsed")
-
 st.markdown(f"""
     <style>
         .main .block-container {{ padding: 0 1.25rem 2rem; max-width: 1400px; }}
@@ -183,7 +170,6 @@ st.markdown(f"""
         [data-testid="stDataFrame"] th {{ background-color: #F7FAFF !important; color: {TEXT_COLOR} !important; }}
     </style>
 """, unsafe_allow_html=True)
-
 # ---------------------------
 # Motor de Simulação (v12) - Corrigido e Verificado
 # ---------------------------
@@ -273,25 +259,26 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         # Distribuição (Retiradas + Fundo) limitada ao caixa
         fundo_mes_total = 0.0
         retirada_mes_efetiva = 0.0
-        if lucro_operacional > 0:
-            base = lucro_operacional
-            retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
-            fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
-            if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
-                retirada_mes_efetiva = cfg_global['max_withdraw_value']
-                fundo_mes_total = fundo_potencial
+        # --- CORREÇÃO: Removida a condição 'if lucro_operacional > 0' ---
+        base = max(0.0, lucro_operacional)  # Garante que a base não seja negativa para o cálculo das porcentagens
+        retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
+        fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
+        # ---
+        if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
+            retirada_mes_efetiva = cfg_global['max_withdraw_value']
+            fundo_mes_total = fundo_potencial
+        else:
+            retirada_mes_efetiva = retirada_potencial
+            fundo_mes_total = fundo_potencial
+        total_distrib = retirada_mes_efetiva + fundo_mes_total
+        if total_distrib > caixa:
+            if caixa > 0:
+                proporcao = caixa / total_distrib
+                retirada_mes_efetiva *= proporcao
+                fundo_mes_total *= proporcao
             else:
-                retirada_mes_efetiva = retirada_potencial
-                fundo_mes_total = fundo_potencial
-            total_distrib = retirada_mes_efetiva + fundo_mes_total
-            if total_distrib > caixa:
-                if caixa > 0:
-                    proporcao = caixa / total_distrib
-                    retirada_mes_efetiva *= proporcao
-                    fundo_mes_total *= proporcao
-                else:
-                    retirada_mes_efetiva = 0.0
-                    fundo_mes_total = 0.0
+                retirada_mes_efetiva = 0.0
+                fundo_mes_total = 0.0
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
@@ -393,7 +380,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             "Desembolso Total": desembolso_total
         })
     return pd.DataFrame(rows)
-    
 # ---------------------------
 # Estado Inicial
 # ---------------------------
@@ -428,19 +414,14 @@ def get_default_config():
             'fundos': []
         }
     }
-
 if 'config' not in st.session_state:
     st.session_state.config = get_default_config()
-
 if 'simulation_df' not in st.session_state:
     st.session_state.simulation_df = pd.DataFrame()
-
 if 'comparison_df' not in st.session_state:
     st.session_state.comparison_df = pd.DataFrame()
-
 if 'selected_strategy' not in st.session_state:
     st.session_state.selected_strategy = 'buy'
-
 # ---------------------------
 # HERO + Navegação superior
 # ---------------------------
@@ -456,9 +437,7 @@ with st.container():
             </div>
         </div>
     """, unsafe_allow_html=True)
-
 tab_dashboard, tab_config, tab_sheet = st.tabs(["Dashboard", "Configurações", "Planilha"])
-
 # ---------------------------
 # CONFIGURAÇÕES (aba)
 # ---------------------------
@@ -698,7 +677,6 @@ with tab_config:
             st.session_state.simulation_df = simulate(st.session_state.config, st.session_state.get("reinvestment_strategy","buy"), cache_key)
             st.session_state.selected_strategy = st.session_state.get("reinvestment_strategy","buy")
         st.success("Simulação concluída!")
-
 # ---------------------------
 # DASHBOARD (aba)
 # ---------------------------
@@ -735,7 +713,6 @@ with tab_dashboard:
                 st.session_state.comparison_df = pd.concat([df_buy, df_rent, df_alt])
                 st.session_state.simulation_df = pd.DataFrame()
                 st.session_state.selected_strategy = None
-
     if not st.session_state.comparison_df.empty:
         st.markdown("### 📈 Análise Comparativa")
         dfc = st.session_state.comparison_df
@@ -753,7 +730,6 @@ with tab_dashboard:
                 'Intercalar': final_alt['Patrimônio Líquido']
             }).idxmax()
             render_kpi_card("Melhor Estratégia", best, SUCCESS_COLOR, "🏆", "Recomendação")
-
         metric_options = [
             "Patrimônio Líquido","Módulos Ativos","Retiradas Acumuladas",
             "Fundo Acumulado","Caixa (Final Mês)","Investimento Total Acumulado"
@@ -765,19 +741,16 @@ with tab_dashboard:
         )
         apply_plot_theme(fig_comp, f"Comparativo de {selected_metric}", h=450)
         st.plotly_chart(fig_comp, use_container_width=True)
-
     elif not st.session_state.simulation_df.empty:
         df = st.session_state.simulation_df
         final = df.iloc[-1]
         summary = calculate_summary_metrics(df)
-
         st.markdown("### 📊 Indicadores Principais")
         k = st.columns(4)
         with k[0]: render_kpi_card("Patrimônio Líquido Final", fmt_brl(final['Patrimônio Líquido']), SUCCESS_COLOR, "💰")
         with k[1]: render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
         with k[2]: render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
         with k[3]: render_kpi_card("Ponto de Equilíbrio", f"Mês {summary['break_even_month']}", WARNING_COLOR, "⚖️")
-
         if final['Patrimônio Terreno'] > 0:
             st.markdown("### 🏡 Análise do Terreno")
             c = st.columns(4)
@@ -785,7 +758,6 @@ with tab_dashboard:
             with c[1]: render_kpi_card("Patrimônio no Terreno", fmt_brl(final['Patrimônio Terreno']), SUCCESS_COLOR, "💰")
             with c[2]: render_kpi_card("Equity Construído", fmt_brl(final['Equity Terreno Inicial']), WARNING_COLOR, "📊")
             with c[3]: render_kpi_card("Juros Pagos", fmt_brl(final['Juros Acumulados']), DANGER_COLOR, "💸")
-
         # Gráficos
         g1, g2 = st.columns(2)
         with g1:
@@ -798,7 +770,6 @@ with tab_dashboard:
             fig.add_trace(go.Scatter(x=df['Mês'], y=df['Receita'], mode='lines', name='Receita', line=dict(color=SUCCESS_COLOR, width=2)))
             fig.add_trace(go.Scatter(x=df['Mês'], y=df['Gastos'], mode='lines', name='Gastos', line=dict(color=DANGER_COLOR, width=2)))
             st.plotly_chart(apply_plot_theme(fig, "Receita vs Gastos"), use_container_width=True)
-
         # Módulos por ano (barras)
         gp = df.groupby('Ano', as_index=False).agg({
             'Módulos Próprios':'last',
@@ -808,7 +779,6 @@ with tab_dashboard:
         fig_bar = go.Figure()
         fig_bar.add_trace(go.Bar(x=gp['Ano'], y=gp['Módulos Ativos'], name='Módulos Ativos', marker_color=PRIMARY_COLOR))
         st.plotly_chart(apply_plot_theme(fig_bar, "Evolução de Módulos por Ano", h=380), use_container_width=True)
-
         # Fluxo de Caixa Mensal (área empilhada)
         flow = df[['Mês','Aporte','Fundo (Mês)','Retirada (Mês)']].copy()
         flow['Retirada (Mês)'] = -flow['Retirada (Mês)']  # saída como negativo p/ visual
@@ -816,7 +786,6 @@ with tab_dashboard:
         fig_area = px.area(flow_melt, x='Mês', y='Valor', color='Tipo',
                            color_discrete_map={"Aporte":SECONDARY_COLOR,"Fundo (Mês)":WARNING_COLOR,"Retirada (Mês)":"#9333EA"})
         st.plotly_chart(apply_plot_theme(fig_area, "Fluxo de Caixa Mensal", h=380), use_container_width=True)
-
         # Performance (ROI% + Investimento/ Caixa)
         perf = df.copy()
         perf['ROI %'] = np.where(perf['Investimento Total Acumulado']>0,
@@ -830,10 +799,8 @@ with tab_dashboard:
             yaxis2=dict(title='ROI (%)', overlaying='y', side='right', showgrid=False)
         )
         st.plotly_chart(apply_plot_theme(fig_perf, "Performance do Investimento", h=420), use_container_width=True)
-
     else:
         st.info("💡 Configure os parâmetros na aba 'Configurações' e execute a simulação para ver os resultados.")
-
 # ---------------------------
 # RELATÓRIOS / PLANILHA (aba)
 # ---------------------------
@@ -854,7 +821,6 @@ with tab_sheet:
             df_analysis = base[base['Estratégia']==selected_strategy].copy()
         else:
             df_analysis = base.copy()
-
         # Análise por ponto no tempo
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 📅 Análise por Ponto no Tempo")
@@ -883,7 +849,6 @@ with tab_sheet:
                     render_report_metric("Retirada (Mês)", fmt_brl(p['Retirada (Mês)']))
                     render_report_metric("Retiradas Acumuladas", fmt_brl(p['Retiradas Acumuladas']))
         st.markdown('</div>', unsafe_allow_html=True)
-
         # Tabela completa selecionável + download
         with st.expander("Clique para ver a Tabela Completa da Simulação"):
             all_cols = df_analysis.columns.tolist()
@@ -891,7 +856,6 @@ with tab_sheet:
             if state_key not in st.session_state:
                 default_cols = ['Mês','Ano','Módulos Ativos','Receita','Gastos','Caixa (Final Mês)','Patrimônio Líquido','Investimento Total Acumulado']
                 st.session_state[state_key] = {c: (c in default_cols) for c in all_cols}
-
             st.markdown("Selecione as colunas para exibir:")
             cols_to_show = []
             grid = st.columns(3)
@@ -901,7 +865,6 @@ with tab_sheet:
                     st.session_state[state_key][c] = st.toggle(c, value=st.session_state[state_key][c], key=tkey)
                     if st.session_state[state_key][c]:
                         cols_to_show.append(c)
-
             if not cols_to_show:
                 st.warning("Selecione ao menos uma coluna.")
             else:
@@ -909,7 +872,6 @@ with tab_sheet:
                 for col in (MONEY_COLS & set(df_disp.columns)):
                     df_disp[col] = df_disp[col].apply(lambda x: fmt_brl(x) if pd.notna(x) else "-")
                 st.dataframe(df_disp[cols_to_show], use_container_width=True, hide_index=True)
-
             excel_bytes = df_to_excel_bytes(df_analysis)
             st.download_button(
                 "📥 Baixar Relatório Completo (Excel)",
@@ -917,5 +879,3 @@ with tab_sheet:
                 file_name=f"relatorio_simulacao_{slug(selected_strategy or 'geral')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-
