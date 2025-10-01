@@ -1,5 +1,7 @@
 # app.py
-# Simulador Modular — v11.2 (final) - Corrigido e Aperfeiçoado
+# Simulador Modular — v11.1 (final) - Corrigido
+# Correções de desembolso total, layout hero + navegação superior por abas e novos gráficos
+# Correção de StreamlitMixedNumericTypesError
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,18 +13,18 @@ import json
 import hashlib
 from copy import deepcopy
 
-# --- PALETA DE CORES (ajustada p/ telas anexas e contraste) ---
-PRIMARY_COLOR   = "#F59E0B"      # Laranja (primário / destaque)
+# --- PALETA DE CORES (ajustada p/ telas anexas) ---
+PRIMARY_COLOR   = "#F5A623"      # Laranja (primário / destaque)
 SECONDARY_COLOR = "#0EA5E9"      # Azul claro
 SUCCESS_COLOR   = "#10B981"      # Verde sucesso
 DANGER_COLOR    = "#EF4444"      # Vermelho erro
-WARNING_COLOR   = "#F59E0B"      # Amarelo alerta (mesmo que primary, mas para contexto de aviso)
+WARNING_COLOR   = "#F59E0B"      # Amarelo alerta
 INFO_COLOR      = "#3B82F6"      # Azul info
-APP_BG          = "#F8FAFC"      # Fundo do app (cinza claro)
+APP_BG          = "#FFFFFF"      # Fundo do app
 CARD_COLOR      = "#FFFFFF"      # Cards brancos
 TEXT_COLOR      = "#0F172A"      # Texto escuro
-MUTED_TEXT_COLOR= "#64748B"      # Texto secundário (cinza médio)
-TABLE_BORDER_COLOR = "#E2E8F0"
+MUTED_TEXT_COLOR= "#334155"      # Texto secundário
+TABLE_BORDER_COLOR = "#E5E7EB"
 CHART_GRID_COLOR  = "#E2E8F0"
 KPI_BG_COLOR    = "#4A8BC9"      # Azul médio p/ cards de KPI
 
@@ -111,7 +113,7 @@ def apply_plot_theme(fig, title=None, h=420):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                     bgcolor='rgba(255,255,255,0.85)', bordercolor=TABLE_BORDER_COLOR, borderwidth=1,
                     font=dict(color=TEXT_COLOR)),
-        plot_bgcolor=CARD_COLOR, paper_bgcolor=APP_BG, font=dict(color=TEXT_COLOR),
+        plot_bgcolor=CARD_COLOR, paper_bgcolor=CARD_COLOR, font=dict(color=TEXT_COLOR),
         xaxis=dict(gridcolor=CHART_GRID_COLOR, linecolor=TABLE_BORDER_COLOR, tickfont=dict(color=MUTED_TEXT_COLOR)),
         yaxis=dict(gridcolor=CHART_GRID_COLOR, linecolor=TABLE_BORDER_COLOR, tickfont=dict(color=MUTED_TEXT_COLOR))
     )
@@ -185,7 +187,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Motor de Simulação (v12) - Corrigido e Verificado
+# Motor de Simulação (v11)
 # ---------------------------
 @st.cache_data(show_spinner=False)
 def simulate(_config, reinvestment_strategy, cache_key: str):
@@ -205,10 +207,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     historical_value_owned  = modules_owned  * cfg_owned['cost_per_module']
     fundo_ac = 0.0
     retiradas_ac = 0.0
+    compra_intercalada_counter = 0
     correction_rate_pct = cfg_global.get('general_correction_rate', 0.0) / 100.0
     land_appreciation_rate_pct = cfg_global.get('land_appreciation_rate', 3.0) / 100.0
-
-    # Preços atuais (serão atualizados anualmente)
     custo_modulo_atual_rented = cfg_rented['cost_per_module']
     custo_modulo_atual_owned  = cfg_owned['cost_per_module']
     receita_p_mod_rented      = cfg_rented['revenue_per_module']
@@ -217,12 +218,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     manut_p_mod_owned         = cfg_owned['maintenance_per_module']
     aluguel_p_novo_mod        = cfg_rented['rent_per_new_module']
     parcela_p_novo_terreno    = cfg_owned['monthly_land_plot_parcel']
-
-    # Calcula o aluguel mensal inicial e das parcelas novas
     aluguel_mensal_corrente = cfg_rented['rent_value'] + (cfg_rented['modules_init'] * cfg_rented['rent_per_new_module'])
     parcelas_terrenos_novos_mensal_corrente = 0.0
-
-    # Inicializa variáveis de financiamento do terreno
+    parcela_terreno_inicial_atual = 0.0
     saldo_financiamento_terreno = 0.0
     equity_terreno_inicial = 0.0
     juros_acumulados = 0.0
@@ -230,8 +228,8 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     valor_compra_terreno = 0.0
     taxa_juros_mensal = 0.0
     amortizacao_mensal = 0.0
-
-    # Se há terreno próprio, inicializa o financiamento
+    aluguel_acumulado = 0.0
+    parcelas_novas_acumuladas = 0.0
     if cfg_owned['land_total_value'] > 0:
         valor_compra_terreno = cfg_owned['land_total_value']
         valor_entrada_terreno = cfg_owned['land_total_value'] * (cfg_owned['land_down_payment_pct'] / 100.0)
@@ -242,24 +240,18 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
             taxa_juros_mensal = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
         investimento_total += valor_entrada_terreno
-
-    # Loop principal de simulação
     for m in range(1, months + 1):
-        # Calcular Receita e Manutenção
         receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
         manut   = (modules_rented * manut_p_mod_rented)   + (modules_owned * manut_p_mod_owned)
         novos_modulos_comprados = 0
-
-        # Adicionar Aportes
+        # Aportes
         aporte_mes = sum(a.get('valor', 0.0) for a in cfg_global['aportes'] if a.get('mes') == m)
         caixa += aporte_mes
         investimento_total += aporte_mes
-
-        # Calcular Gastos Operacionais
+        # Operacional
         gastos_operacionais = aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente
         lucro_operacional = receita - manut - gastos_operacionais
-
-        # Calcular Parcela do Terreno Inicial
+        # Financiamento terreno inicial
         juros_terreno_mes = 0.0
         amortizacao_terreno_mes = 0.0
         parcela_terreno_inicial_mes = 0.0
@@ -271,11 +263,8 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             equity_terreno_inicial += amortizacao_terreno_mes
             juros_acumulados += juros_terreno_mes
             amortizacao_acumulada += amortizacao_terreno_mes
-
-        # Atualizar Caixa
         caixa += lucro_operacional
         caixa -= parcela_terreno_inicial_mes
-
         # Distribuição (Retiradas + Fundo) limitada ao caixa
         fundo_mes_total = 0.0
         retirada_mes_efetiva = 0.0
@@ -283,14 +272,12 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             base = lucro_operacional
             retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['retiradas'] if m >= r['mes'])
             fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['fundos'] if m >= f['mes'])
-
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
                 retirada_mes_efetiva = cfg_global['max_withdraw_value']
                 fundo_mes_total = fundo_potencial
             else:
                 retirada_mes_efetiva = retirada_potencial
                 fundo_mes_total = fundo_potencial
-
             total_distrib = retirada_mes_efetiva + fundo_mes_total
             if total_distrib > caixa:
                 if caixa > 0:
@@ -300,15 +287,12 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                 else:
                     retirada_mes_efetiva = 0.0
                     fundo_mes_total = 0.0
-
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
-
         # Acumuladores de desembolso corrente
         aluguel_acumulado += aluguel_mensal_corrente
         parcelas_novas_acumuladas += parcelas_terrenos_novos_mensal_corrente
-
         # Reinvestimento anual
         if m % 12 == 0:
             if reinvestment_strategy == 'buy':
@@ -350,8 +334,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                             historical_value_rented += custo_da_compra
                             modules_rented += novos_modulos_comprados
                             aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
-
-            # Aplicar correção anual nos preços
+            # Correção anual
             correction_factor = 1 + correction_rate_pct
             custo_modulo_atual_owned  *= correction_factor
             custo_modulo_atual_rented *= correction_factor
@@ -363,8 +346,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             parcelas_terrenos_novos_mensal_corrente *= correction_factor
             parcela_p_novo_terreno    *= correction_factor
             aluguel_p_novo_mod        *= correction_factor
-
-        # Calcular Patrimônio
+        # Patrimônio
         valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12))
         patrimonio_terreno = valor_mercado_terreno - saldo_financiamento_terreno
         ativos  = historical_value_owned + historical_value_rented + caixa + fundo_ac + patrimonio_terreno
@@ -372,8 +354,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         patrimonio_liquido = ativos - passivos
         desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
         gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
-
-        # Adicionar linha ao DataFrame
         rows.append({
             "Mês": m,
             "Ano": (m - 1) // 12 + 1,
@@ -406,7 +386,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             "Parcelas Novas Acumuladas": parcelas_novas_acumuladas,
             "Desembolso Total": desembolso_total
         })
-
     return pd.DataFrame(rows)
 
 # ---------------------------
@@ -428,6 +407,7 @@ def get_default_config():
             'revenue_per_module': 4500.0,
             'maintenance_per_module': 200.0,
             'monthly_land_plot_parcel': 200.0,
+            'land_value_per_module': 25000.0,
             'land_total_value': 0.0,
             'land_down_payment_pct': 20.0,
             'land_installments': 120,
@@ -454,7 +434,7 @@ if 'comparison_df' not in st.session_state:
     st.session_state.comparison_df = pd.DataFrame()
 
 if 'selected_strategy' not in st.session_state:
-    st.session_state.selected_strategy = 'buy'
+    st.session_state.selected_strategy = None
 
 # ---------------------------
 # HERO + Navegação superior
@@ -658,7 +638,7 @@ with tab_config:
         </div>
     """, unsafe_allow_html=True)
 
-    # Eventos Financeiros em 3 cards (Aqui, dentro da aba Configurações)
+    # Eventos Financeiros em 3 cards
     e1, e2, e3 = st.columns(3)
     with e1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -897,10 +877,9 @@ with tab_sheet:
         if not subset.empty:
             months_in_year = sorted([((m-1)%12)+1 for m in subset['Mês'].unique()])
             sel_m = c2.selectbox("Mês", options=months_in_year)
-            # Correção: Filtrar corretamente pelo ano e mês selecionados
-            filtered = subset[subset['Mês'] == ((sel_year - 1) * 12 + sel_m)]
+            filtered = subset[((subset["Mês"] - 1) % 12) + 1 == sel_m]
             if not filtered.empty:
-                p = filtered.iloc[0] # Pegar a primeira linha (deve ser apenas uma)
+                p = filtered.iloc[0]
                 r = st.columns(4)
                 with r[0]:
                     render_report_metric("Módulos Ativos", f"{int(p['Módulos Ativos'])}")
