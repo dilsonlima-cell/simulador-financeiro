@@ -604,7 +604,6 @@ with tab_config:
         o['maintenance_per_module'] = r['maintenance_per_module']
         st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=o['maintenance_per_module'], format="%.2f", key="own_maint_mod", disabled=True)
         
-        # Campo Parcela mensal por novo terreno (R$) - será ajustado na próxima fase
         # Campo Parcela mensal por novo terreno (R$) - vinculado à 1ª Parcela Estimada
         o['monthly_land_plot_parcel'] = primeira_parcela
         st.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=o['monthly_land_plot_parcel'], format="%.2f", key="own_land_parcel", disabled=True)
@@ -666,6 +665,29 @@ with tab_transactions:
         g['contributions'].append({"mes": ap_mes, "valor": ap_val})
         st.session_state.config_changed = True
         st.rerun()
+    if g['contributions']:
+        st.markdown("**Aportes agendados:**")
+        for i, a in enumerate(g['contributions']):
+            cA, cB, cC = st.columns([3,2,1])
+            cA.write(f"Mês {a['mes']}")
+            cB.write(f"{fmt_brl(a['valor'])}")
+            if cC.button("🗑️", key=f"trans_del_aporte_{i}"):
+                g['contributions'].pop(i)
+                st.session_state.config_changed = True
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("#### ↩️ Retiradas")
+    colA, colB = st.columns([1,2])
+    with colA:
+        r_mes = st.number_input("Mês inicial", 1, g['years']*12, 1, key="trans_retirada_mes")
+    with colB:
+        r_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="trans_retirada_pct")
+    if st.button("➕ Adicionar Retirada", key="btn_trans_add_retirada"):
+        g['withdrawals'].append({"mes": r_mes, "percentual": r_pct})
+        st.session_state.config_changed = True
+        st.rerun()
+
     if g['withdrawals']:
         st.markdown("**Regras ativas:**")
         for i, r_ in enumerate(g['withdrawals']):
