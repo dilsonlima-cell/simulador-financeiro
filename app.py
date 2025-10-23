@@ -9,6 +9,22 @@ import json
 import hashlib
 from copy import deepcopy
 
+# --- ESTADO DA SESSÃO ---
+if 'config' not in st.session_state:
+    st.session_state.config = {
+        'rented': {'modules_init': 0, 'cost_per_module': 0.0, 'revenue_per_module': 0.0, 'maintenance_per_module': 0.0, 'rent_value': 0.0, 'rent_per_new_module': 0.0},
+        'owned': {'modules_init': 0, 'cost_per_module': 0.0, 'monthly_land_plot_parcel': 0.0, 'revenue_per_module': 0.0, 'maintenance_per_module': 0.0, 'land_total_value': 0.0, 'land_down_payment_pct': 0.0, 'land_installments': 1, 'land_interest_rate': 8.0},
+        'global': {'years': 10, 'general_correction_rate': 3.0, 'max_withdraw_value': 0.0, 'land_appreciation_rate': 3.0, 'contributions': [], 'withdrawals': [], 'reserve_funds': []}
+    }
+if 'simulation_df' not in st.session_state:
+    st.session_state.simulation_df = pd.DataFrame()
+if 'comparison_df' not in st.session_state:
+    st.session_state.comparison_df = pd.DataFrame()
+if 'selected_strategy' not in st.session_state:
+    st.session_state.selected_strategy = 'buy'
+if 'config_changed' not in st.session_state:
+    st.session_state.config_changed = False
+
 # --- PALETA DE CORES (fiel à imagem) ---
 PRIMARY_COLOR   = "#FF9234"      # Laranja vibrante do header
 SECONDARY_COLOR = "#6C757D"      # Cinza escuro dos textos secundários
@@ -598,6 +614,7 @@ with tab_config:
             cache_key = compute_cache_key(st.session_state.config)
             st.session_state.simulation_df = simulate(st.session_state.config, reinvestment_strategy, cache_key)
             st.session_state.selected_strategy = reinvestment_strategy
+            st.session_state.config_changed = False # Resetar o flag após simulação
         st.success("Simulação concluída!")
 
 # ---------------------------
@@ -624,6 +641,7 @@ with tab_transactions:
         ap_val = st.number_input("Valor (R$)", 0.0, key="trans_aporte_valor")
     if st.button("➕ Adicionar Aporte", key="btn_trans_add_aporte"):
         g['contributions'].append({"mes": ap_mes, "valor": ap_val})
+        st.session_state.config_changed = True
         st.rerun()
     
     if g['contributions']:
@@ -634,6 +652,7 @@ with tab_transactions:
             cB.write(fmt_brl(a['valor']))
             if cC.button("🗑️", key=f"trans_del_aporte_{i}"):
                 g['contributions'].pop(i)
+                st.session_state.config_changed = True
                 st.rerun()
     
     st.markdown("---")
@@ -645,6 +664,7 @@ with tab_transactions:
         r_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="trans_retirada_pct")
     if st.button("➕ Adicionar Retirada", key="btn_trans_add_retirada"):
         g['withdrawals'].append({"mes": r_mes, "percentual": r_pct})
+        st.session_state.config_changed = True
         st.rerun()
     
     if g['withdrawals']:
@@ -655,6 +675,7 @@ with tab_transactions:
             cB.write(f"{r_['percentual']}%")
             if cC.button("🗑️", key=f"trans_del_retirada_{i}"):
                 g['withdrawals'].pop(i)
+                st.session_state.config_changed = True
                 st.rerun()
     
     st.markdown("---")
@@ -666,6 +687,7 @@ with tab_transactions:
         f_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="trans_fundo_pct")
     if st.button("➕ Adicionar Fundo", key="btn_trans_add_fundo"):
         g['reserve_funds'].append({"mes": f_mes, "percentual": f_pct})
+        st.session_state.config_changed = True
         st.rerun()
     
     if g['reserve_funds']:
@@ -676,6 +698,7 @@ with tab_transactions:
             cB.write(f"{f['percentual']}%")
             if cC.button("🗑️", key=f"trans_del_fundo_{i}"):
                 g['reserve_funds'].pop(i)
+                st.session_state.config_changed = True
                 st.rerun()
 
 # ---------------------------
@@ -684,9 +707,12 @@ with tab_transactions:
 with tab_results:
     st.markdown("<h3 class='section-title'>📈 Dashboard de Projeção</h3>", unsafe_allow_html=True)
     
-    if not st.session_state.simulation_df.empty and not st.session_state.comparison_df.empty:
+    # Se a configuração mudou (ex: transações), forçar re-execução
+    if st.session_state.config_changed:
         st.session_state.simulation_df = pd.DataFrame()
-    
+        st.session_state.comparison_df = pd.DataFrame()
+        st.info("As configurações de transação foram alteradas. Execute a simulação novamente.")
+        
     cfg_copy = deepcopy(st.session_state.config)
     cache_key = compute_cache_key(cfg_copy)
     
