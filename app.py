@@ -14,7 +14,7 @@ if 'config' not in st.session_state:
     st.session_state.config = {
         'rented': {'modules_init': 0, 'cost_per_module': 0.0, 'revenue_per_module': 0.0, 'maintenance_per_module': 0.0, 'rent_value': 0.0, 'rent_per_new_module': 0.0},
         'owned': {'modules_init': 0, 'cost_per_module': 0.0, 'monthly_land_plot_parcel': 0.0, 'revenue_per_module': 0.0, 'maintenance_per_module': 0.0, 'land_total_value': 0.0, 'land_down_payment_pct': 0.0, 'land_installments': 1, 'land_interest_rate': 8.0},
-        'global': {'years': 10, 'general_correction_rate': 3.0, 'max_withdraw_value': 0.0, 'land_appreciation_rate': 3.0, 'contributions': [], 'withdrawals': [], 'reserve_funds': []}
+        'global': {'years': 10, 'general_correction_rate': 3.0, 'max_withdraw_value': 0.0, 'land_appreciation_rate': 3.0, 'contributions': [], 'withdrawals': [], 'reserve_funds': [], 'reinvestment_strategy': 'buy'}
     }
 if 'simulation_df' not in st.session_state:
     st.session_state.simulation_df = pd.DataFrame()
@@ -331,34 +331,51 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             amortizacao_acumulada += amortizacao_terreno_mes
         
         caixa += lucro_operacional
+        
+        # Financiamento terreno inicial é um gasto, já subtraído do caixa
         caixa -= parcela_terreno_inicial_mes
         
-        # Distribuição (Retiradas + Fundo) limitada ao caixa
+        # Distribuição (Retiradas + Fundo) limitada ao lucro e ao caixa
         fundo_mes_total = 0.0
         retirada_mes_efetiva = 0.0
         
-        if lucro_operacional > 0:
-            base = lucro_operacional
+        # 1. Calcular a base de lucro para distribuição (Lucro Operacional - Parcela Terreno Inicial)
+        lucro_distribuivel = lucro_operacional - parcela_terreno_inicial_mes
+        
+        if lucro_distribuivel > 0:
+            base = lucro_distribuivel
+            
+            # Calcular retiradas e fundo potenciais
             retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['withdrawals'] if m >= r['mes'])
             fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['reserve_funds'] if m >= f['mes'])
             
+            # Aplicar limite máximo de retirada
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
                 retirada_mes_efetiva = cfg_global['max_withdraw_value']
+                # O fundo continua sendo calculado sobre a base total, mas a retirada é limitada.
+                # A base de cálculo para o fundo é o lucro distribuível.
                 fundo_mes_total = fundo_potencial
             else:
                 retirada_mes_efetiva = retirada_potencial
                 fundo_mes_total = fundo_potencial
             
             total_distrib = retirada_mes_efetiva + fundo_mes_total
-            if total_distrib > caixa:
-                if caixa > 0:
-                    proporcao = caixa / total_distrib
+            
+            # 2. Limitar a distribuição ao caixa disponível (após todas as entradas e saídas)
+            # O caixa já foi atualizado com lucro_operacional e subtraído da parcela_terreno_inicial_mes
+            caixa_apos_operacional = caixa 
+            
+            if total_distrib > caixa_apos_operacional:
+                if caixa_apos_operacional > 0:
+                    # Distribuição proporcional ao caixa
+                    proporcao = caixa_apos_operacional / total_distrib
                     retirada_mes_efetiva *= proporcao
                     fundo_mes_total *= proporcao
                 else:
                     retirada_mes_efetiva = 0.0
                     fundo_mes_total = 0.0
         
+        # 3. Atualizar o caixa e acumuladores
         caixa -= (retirada_mes_efetiva + fundo_mes_total)
         retiradas_ac += retirada_mes_efetiva
         fundo_ac += fundo_mes_total
@@ -596,7 +613,8 @@ with tab_config:
             "Como reinvestir o lucro?",
             ["buy", "rent", "alternate"],
             format_func=lambda x: {"buy":"Comprar módulos próprios","rent":"Alugar novos módulos","alternate":"Alternar entre comprar e alugar"}[x],
-            key="reinvestment_strategy"
+            key="reinvestment_strategy",
+            on_change=lambda: st.session_state.config['global'].update({'reinvestment_strategy': st.session_state.reinvestment_strategy})
         )
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -609,13 +627,7 @@ with tab_config:
         </div>
     """, unsafe_allow_html=True)
     
-    if st.button("🚀 Executar Simulação", type="primary", use_container_width=True):
-        with st.spinner("Calculando projeção..."):
-            cache_key = compute_cache_key(st.session_state.config)
-            st.session_state.simulation_df = simulate(st.session_state.config, reinvestment_strategy, cache_key)
-            st.session_state.selected_strategy = reinvestment_strategy
-            st.session_state.config_changed = False # Resetar o flag após simulação
-        st.success("Simulação concluída!")
+    st.info("💡 Configure as transações na aba **Transações** e clique em **Executar Simulação** para iniciar a projeção.")
 
 # ---------------------------
 # TRANSAÇÕES (aba)
@@ -643,30 +655,6 @@ with tab_transactions:
         g['contributions'].append({"mes": ap_mes, "valor": ap_val})
         st.session_state.config_changed = True
         st.rerun()
-    
-    if g['contributions']:
-        st.markdown("**Aportes agendados:**")
-        for i, a in enumerate(g['contributions']):
-            cA, cB, cC = st.columns([3,2,1])
-            cA.write(f"Mês {a['mes']}")
-            cB.write(fmt_brl(a['valor']))
-            if cC.button("🗑️", key=f"trans_del_aporte_{i}"):
-                g['contributions'].pop(i)
-                st.session_state.config_changed = True
-                st.rerun()
-    
-    st.markdown("---")
-    st.markdown("#### ↩️ Retiradas")
-    colA, colB = st.columns([1,2])
-    with colA:
-        r_mes = st.number_input("Mês inicial", 1, g['years']*12, 1, key="trans_retirada_mes")
-    with colB:
-        r_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="trans_retirada_pct")
-    if st.button("➕ Adicionar Retirada", key="btn_trans_add_retirada"):
-        g['withdrawals'].append({"mes": r_mes, "percentual": r_pct})
-        st.session_state.config_changed = True
-        st.rerun()
-    
     if g['withdrawals']:
         st.markdown("**Regras ativas:**")
         for i, r_ in enumerate(g['withdrawals']):
@@ -677,7 +665,7 @@ with tab_transactions:
                 g['withdrawals'].pop(i)
                 st.session_state.config_changed = True
                 st.rerun()
-    
+
     st.markdown("---")
     st.markdown("#### 🧱 Fundo de Reserva")
     colA, colB = st.columns([1,2])
@@ -689,7 +677,7 @@ with tab_transactions:
         g['reserve_funds'].append({"mes": f_mes, "percentual": f_pct})
         st.session_state.config_changed = True
         st.rerun()
-    
+
     if g['reserve_funds']:
         st.markdown("**Regras ativas:**")
         for i, f in enumerate(g['reserve_funds']):
@@ -701,6 +689,16 @@ with tab_transactions:
                 st.session_state.config_changed = True
                 st.rerun()
 
+    st.markdown("---")
+
+    if st.button("🚀 Executar Simulação", type="primary", use_container_width=True):
+        with st.spinner("Calculando projeção..."):
+            cache_key = compute_cache_key(st.session_state.config)
+            reinvestment_strategy = st.session_state.config['global']['reinvestment_strategy']
+            st.session_state.simulation_df = simulate(st.session_state.config, reinvestment_strategy, cache_key)
+            st.session_state.selected_strategy = reinvestment_strategy
+            st.session_state.config_changed = False # Resetar o flag após simulação
+        st.success("Simulação concluída!")
 # ---------------------------
 # RESULTADOS (aba)
 # ---------------------------
