@@ -276,9 +276,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     receita_p_mod_owned       = cfg_owned['revenue_per_module']
     manut_p_mod_rented        = cfg_rented['maintenance_per_module']
     manut_p_mod_owned         = cfg_owned['maintenance_per_module']
-    aluguel_p_novo_mod        = cfg_rented['rent_per_new_module']
+    aluguel_p_novo_mod        = cfg_rented['rent_value']
     parcela_p_novo_terreno    = cfg_owned['monthly_land_plot_parcel']
-    aluguel_mensal_corrente = cfg_rented['rent_value'] + (cfg_rented['modules_init'] * cfg_rented['rent_per_new_module'])
+    aluguel_mensal_corrente = cfg_rented['rent_value'] * (cfg_rented['modules_init'] + 1) # O custo do aluguel é por módulo alugado (incluindo o inicial)
     parcelas_terrenos_novos_mensal_corrente = 0.0
     saldo_financiamento_terreno = 0.0
     equity_terreno_inicial = 0.0
@@ -566,7 +566,6 @@ with tab_config:
         r['revenue_per_module'] = st.number_input("Receita mensal/módulo (R$)", 0.0, value=r['revenue_per_module'], format="%.2f", key="rent_rev_mod")
         r['maintenance_per_module'] = st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=r['maintenance_per_module'], format="%.2f", key="rent_maint_mod")
         r['rent_value'] = st.number_input("Aluguel mensal fixo (R$)", 0.0, value=r['rent_value'], format="%.2f", key="rent_base_rent")
-        r['rent_per_new_module'] = st.number_input("Custo aluguel por novo módulo (R$)", 0.0, value=r['rent_per_new_module'], format="%.2f", key="rent_new_rent")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with c2:
@@ -576,6 +575,7 @@ with tab_config:
         st.markdown("##### Financiamento do Terreno Inicial")
         o['land_total_value'] = st.number_input("Valor total do terreno (R$)", 0.0, value=o['land_total_value'], format="%.2f", key="own_total_land_val")
         
+        primeira_parcela = 0.0
         if o['land_total_value'] > 0:
             o['land_down_payment_pct'] = st.number_input("Entrada (%)", 0.0, 100.0, value=o['land_down_payment_pct'], format="%.1f", key="own_down_pay")
             o['land_installments'] = st.number_input("Parcelas (qtd.)", 1, 480, value=o['land_installments'], key="own_install")
@@ -593,10 +593,21 @@ with tab_config:
         
         st.markdown("##### Módulos Próprios")
         o['modules_init'] = st.number_input("Módulos iniciais (próprios)", 0, value=o['modules_init'], key="own_mod_init")
-        o['cost_per_module'] = st.number_input("Custo por módulo (R$)", 0.0, value=o['cost_per_module'], format="%.2f", key="own_cost_mod")
-        o['monthly_land_plot_parcel'] = st.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=o['monthly_land_plot_parcel'], format="%.2f", key="own_land_parcel")
-        o['revenue_per_module'] = st.number_input("Receita mensal/módulo (R$)", 0.0, value=o['revenue_per_module'], format="%.2f", key="own_rev_mod")
-        o['maintenance_per_module'] = st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=o['maintenance_per_module'], format="%.2f", key="own_maint_mod")
+        
+        # Campos vinculados ao Terreno Alugado e não-editáveis
+        o['cost_per_module'] = r['cost_per_module']
+        st.number_input("Custo por módulo (R$)", 0.0, value=o['cost_per_module'], format="%.2f", key="own_cost_mod", disabled=True)
+        
+        o['revenue_per_module'] = r['revenue_per_module']
+        st.number_input("Receita mensal/módulo (R$)", 0.0, value=o['revenue_per_module'], format="%.2f", key="own_rev_mod", disabled=True)
+        
+        o['maintenance_per_module'] = r['maintenance_per_module']
+        st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=o['maintenance_per_module'], format="%.2f", key="own_maint_mod", disabled=True)
+        
+        # Campo Parcela mensal por novo terreno (R$) - será ajustado na próxima fase
+        # Campo Parcela mensal por novo terreno (R$) - vinculado à 1ª Parcela Estimada
+        o['monthly_land_plot_parcel'] = primeira_parcela
+        st.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=o['monthly_land_plot_parcel'], format="%.2f", key="own_land_parcel", disabled=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with c3:
