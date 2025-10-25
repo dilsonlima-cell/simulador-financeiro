@@ -163,11 +163,11 @@ def compute_initial_investment_total(cfg):
 st.set_page_config(page_title="Simulador Financeiro de Investimentos", layout="wide", initial_sidebar_state="collapsed")
 st.markdown(f"""
 <style>
-.main .block-container {{ padding: 0 1.25rem 2rem; max-width: 1400px; }}
-.stApp {{ background: {APP_BG}; }}
-h1, h2, h3, h4, h5, h6 {{ color: {TEXT_COLOR}; font-weight: 700; }}
-/* Header */
-.header {{
+    .main .block-container {{ padding: 0 1.25rem 2rem; max-width: 1400px; }}
+    .stApp {{ background: {APP_BG}; }}
+    h1, h2, h3, h4, h5, h6 {{ color: {TEXT_COLOR}; font-weight: 700; }}
+    /* Header */
+    .header {{
             background: linear-gradient(90deg, #FF9234 0%, #FFC107 100%);
             color: white; padding: 1.5rem 1.2rem; text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
