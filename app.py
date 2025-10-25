@@ -541,20 +541,34 @@ with tab_config:
         st.markdown("---")
         st.markdown("#### 🔄 Estratégia de Reinvestimento")
         
+        # Lógica para garantir que o selectbox atualize o state
+        reinvestment_options = ["buy", "rent", "alternate"]
+        reinvestment_display = {"buy":"Comprar módulos próprios","rent":"Alugar novos módulos","alternate":"Alternar entre comprar e alugar"}
+        
+        current_strategy = st.session_state.config['global']['reinvestment_strategy']
+        
         reinvestment_strategy = st.selectbox(
             "Como reinvestir o lucro?",
-            ["buy", "rent", "alternate"],
-            format_func=lambda x: {"buy":"Comprar módulos próprios","rent":"Alugar novos módulos","alternate":"Alternar entre comprar e alugar"}[x],
-            key="reinvestment_strategy",
-            on_change=lambda: st.session_state.config['global'].update({'reinvestment_strategy': st.session_state.reinvestment_strategy})
+            reinvestment_options,
+            format_func=lambda x: reinvestment_display[x],
+            index=reinvestment_options.index(current_strategy),
+            key="reinvestment_strategy_select"
         )
+        st.session_state.config['global']['reinvestment_strategy'] = reinvestment_strategy
         
         st.markdown("---")
         st.markdown("#### 💰 Configuração do Financiamento")
         
         r['rent_value'] = st.number_input("Aluguel mensal fixo por módulo (R$)", 0.0, value=r['rent_value'], format="%.2f", key="rent_base_rent")
         
-        if 'buy' in [reinvestment_strategy, st.session_state.config['global'].get('reinvestment_strategy')] or o['modules_init'] > 0:
+        # Lógica Condicional para mostrar o financiamento
+        should_show_finance = (
+            reinvestment_strategy == 'buy' or 
+            reinvestment_strategy == 'alternate' or 
+            o['modules_init'] > 0
+        )
+        
+        if should_show_finance:
             st.markdown("##### Financiamento do Terreno Inicial")
             o['land_total_value'] = st.number_input("Valor total do terreno (R$)", 0.0, value=o['land_total_value'], format="%.2f", key="own_total_land_val")
             
@@ -567,6 +581,8 @@ with tab_config:
                 valor_entrada = o['land_total_value'] * (o['land_down_payment_pct'] / 100.0)
                 valor_financiado = o['land_total_value'] - valor_entrada
                 taxa_juros_mensal = (o['land_interest_rate'] / 100.0) / 12
+                
+                # Cálculo da parcela (simplificado - PMT seria mais preciso)
                 amortizacao_mensal = valor_financiado / o['land_installments'] if o['land_installments'] > 0 else 0
                 primeira_parcela = amortizacao_mensal + (valor_financiado * taxa_juros_mensal) if o['land_installments'] > 0 else 0
                 
@@ -574,6 +590,7 @@ with tab_config:
                 with cA: st.metric("Valor da Entrada", fmt_brl(valor_entrada))
                 with cB: st.metric("1ª Parcela Estimada", fmt_brl(primeira_parcela))
             
+            # Atualiza a parcela mensal por novo terreno (que é a mesma do terreno inicial no modelo simplificado)
             o['monthly_land_plot_parcel'] = primeira_parcela
             st.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=o['monthly_land_plot_parcel'], format="%.2f", key="own_land_parcel", disabled=True)
             
@@ -582,7 +599,14 @@ with tab_config:
                 o['land_installments'] = 1
                 o['land_interest_rate'] = 0.0
                 o['monthly_land_plot_parcel'] = 0.0
-        
+        else:
+            # Garante que os valores de financiamento sejam zero se o usuário não estiver comprando
+            o['land_total_value'] = 0.0
+            o['land_down_payment_pct'] = 0.0
+            o['land_installments'] = 1
+            o['land_interest_rate'] = 0.0
+            o['monthly_land_plot_parcel'] = 0.0
+
         st.markdown('</div>', unsafe_allow_html=True)
     
     st.info("💡 Configure as transações na aba **Transações** e clique em **Executar Simulação** para iniciar a projeção.")
