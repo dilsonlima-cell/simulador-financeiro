@@ -290,6 +290,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     terrenos_adquiridos_count = 0 
     # Acompanha o investimento total em terrenos (entrada + amortização)
     investimento_terrenos_total = 0.0
+    
+    # Variável para rastrear o saldo devedor dos terrenos novos
+    saldo_devedor_novos_terrenos = 0.0
     saldo_financiamento_terreno = 0.0
     equity_terreno_inicial = 0.0
     juros_acumulados = 0.0
@@ -398,6 +401,10 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         aluguel_acumulado += aluguel_mensal_corrente
         parcelas_novas_acumuladas += parcelas_terrenos_novos_mensal_corrente
         
+        # Amortização do saldo devedor dos novos terrenos (simplificado: parcela mensal amortece o saldo)
+        saldo_devedor_novos_terrenos -= parcelas_terrenos_novos_mensal_corrente
+        saldo_devedor_novos_terrenos = max(0, saldo_devedor_novos_terrenos) # Não pode ser negativo
+        
         # Reinvestimento anual
         if m % 12 == 0:
             if reinvestment_strategy == 'buy':
@@ -414,6 +421,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                         terrenos_adquiridos_count += novos_modulos_comprados # Cada módulo comprado com terreno próprio representa um novo terreno no modelo simplificado
                         # No modelo simplificado, assumimos que o valor do terreno é embutido no custo do módulo
                         investimento_terrenos_total += custo_da_compra # Entrada/Investimento inicial no novo terreno/módulo
+                        saldo_devedor_novos_terrenos += custo_da_compra # Adiciona o custo da compra ao saldo devedor dos novos terrenos
             elif reinvestment_strategy == 'rent':
                 custo = custo_modulo_atual_rented
                 if caixa >= custo > 0:
@@ -440,6 +448,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                             parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
                             terrenos_adquiridos_count += novos_modulos_comprados
                             investimento_terrenos_total += custo_da_compra
+                            saldo_devedor_novos_terrenos += custo_da_compra # Adiciona o custo da compra ao saldo devedor dos novos terrenos
                         else:
                             historical_value_rented += custo_da_compra
                             modules_rented += novos_modulos_comprados
@@ -471,15 +480,14 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         # Dívida Futura (Simplificado: Saldo devedor do terreno inicial + parcelas futuras dos novos terrenos)
         # O saldo devedor dos novos terrenos é a soma das parcelas futuras (parcelas_terrenos_novos_mensal_corrente * parcelas_restantes, mas no modelo simplificado, usamos a parcela mensal como proxy para o custo de capital)
         # Como não temos o saldo devedor dos novos terrenos, vamos usar o saldo devedor do terreno inicial como proxy para a dívida futura.
-        # Dívida Futura (Total) = Saldo Devedor Terreno Inicial + (Parcelas Novas Acumuladas / Mês) * (Parcelas restantes) -> Complexo.
-        # Vamos usar o Saldo Devedor do Terreno Inicial como Dívida Futura, já que é o único financiamento explícito.
-        # Se o usuário quiser o valor total das parcelas a vencer, precisaríamos de uma estrutura de dívida para cada terreno.
-        # Dada a estrutura atual, o melhor proxy para Dívida Futura Total é o saldo devedor do Terreno Inicial.
-        dívida_futura_total = saldo_financiamento_terreno # Saldo devedor do Terreno Inicial
+        # Dívida Futura (Total) = Saldo Devedor Terreno Inicial + Saldo Devedor dos Novos Terrenos
+        # O Saldo Devedor dos Novos Terrenos é um saldo teórico que é amortizado pelas parcelas mensais.
+        dívida_futura_total = saldo_financiamento_terreno + saldo_devedor_novos_terrenos
         
         patrimonio_terreno = valor_mercado_terreno_inicial - saldo_financiamento_terreno
         ativos  = historical_value_owned + historical_value_rented + caixa + fundo_ac + patrimonio_terreno
-        passivos= saldo_financiamento_terreno # Passivos é o saldo devedor do terreno inicial.
+        # O passivo total é o saldo devedor do terreno inicial MAIS o saldo devedor dos novos terrenos.
+        passivos= saldo_financiamento_terreno + saldo_devedor_novos_terrenos
         patrimonio_liquido = ativos - passivos
         desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
         gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
@@ -878,6 +886,12 @@ with tab_results:
             render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
         with k[3]: 
             render_kpi_card("Ponto de Equilíbrio", f"Mês {summary['break_even_month']}", WARNING_COLOR, "⚖️")
+        
+        # NOVO KPI: Módulos Ativos (Total)
+        st.markdown("### ⚙️ Módulos Ativos")
+        k_mod = st.columns(4)
+        with k_mod[0]:
+            render_kpi_card("Total de Módulos Ativos", f"{int(final['Módulos Ativos'])}", PRIMARY_COLOR, "⚙️")
         
         if final['Patrimônio Terreno'] > 0:
             st.markdown("### 🏡 Análise do Terreno")
