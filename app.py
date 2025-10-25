@@ -253,7 +253,7 @@ st.markdown(f"""
         .report-metric-title {{ font-size: 0.9rem; font-weight: 600; opacity: 0.8; }}
         .report-metric-value {{ font-size: 1.25rem; font-weight: 700; }}
     </style>
-''', unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ---------------------------
 # Motor de Simulação
