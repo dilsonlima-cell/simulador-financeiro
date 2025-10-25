@@ -813,7 +813,7 @@ with tab_config:
         st.session_state.simulation_df = run_simulation(st.session_state.config)
         st.session_state.config_changed = False
         st.success("Simulação concluída com sucesso!")
-        st.experimental_rerun()
+        st.rerun()
 
     # Botão de Comparativo
     if st.button("🔄 Adicionar ao Comparativo", use_container_width=True, key="add_comparison_btn"):
@@ -837,7 +837,7 @@ with tab_config:
                 st.session_state.comparison_df = pd.concat([st.session_state.comparison_df, df_comp], ignore_index=True)
             
             st.success(f"Estratégia '{strategy_name}' adicionada ao comparativo!")
-            st.experimental_rerun()
+            st.rerun()
 
     if not st.session_state.comparison_df.empty:
         st.markdown("---")
@@ -846,7 +846,7 @@ with tab_config:
         if st.button("🗑️ Limpar Comparativo", use_container_width=True, key="clear_comparison_btn"):
             st.session_state.comparison_df = pd.DataFrame()
             st.success("Comparativo limpo!")
-            st.experimental_rerun()
+            st.rerun()
 
 # ---------------------------
 # SIMULAÇÃO (aba)
