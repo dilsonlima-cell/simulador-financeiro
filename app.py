@@ -10,11 +10,38 @@ import hashlib
 from copy import deepcopy
 
 # --- ESTADO DA SESSÃO ---
+# A configuração foi simplificada: os valores por módulo são globais.
+# A estratégia de terreno (rented/owned/alternate) é definida por 'land_strategy'.
 if 'config' not in st.session_state:
     st.session_state.config = {
-        'rented': {'modules_init': 0, 'cost_per_module': 0.0, 'revenue_per_module': 0.0, 'maintenance_per_module': 0.0, 'rent_value': 0.0, 'rent_per_new_module': 0.0},
-        'owned': {'modules_init': 0, 'cost_per_module': 0.0, 'monthly_land_plot_parcel': 0.0, 'revenue_per_module': 0.0, 'maintenance_per_module': 0.0, 'land_total_value': 0.0, 'land_down_payment_pct': 0.0, 'land_installments': 1, 'land_interest_rate': 8.0},
-        'global': {'years': 10, 'general_correction_rate': 3.0, 'max_withdraw_value': 0.0, 'land_appreciation_rate': 3.0, 'contributions': [], 'withdrawals': [], 'reserve_funds': [], 'reinvestment_strategy': 'buy'}
+        'global': {
+            'years': 10, 
+            'general_correction_rate': 3.0, 
+            'max_withdraw_value': 0.0, 
+            'land_appreciation_rate': 3.0, 
+            'contributions': [], 
+            'withdrawals': [], 
+            'reserve_funds': [], 
+            'reinvestment_strategy': 'buy',
+            'cost_per_module': 75000.0, # Novo campo global
+            'revenue_per_module': 4500.0, # Novo campo global
+            'maintenance_per_module': 200.0, # Novo campo global
+            'modules_init': 1, # Módulos iniciais (global)
+        },
+        'rented': {
+            'rent_value': 750.0, # Aluguel por módulo inicial
+            'rent_per_new_module': 950.0 # Aluguel por novo módulo
+        },
+        'owned': {
+            'land_total_value': 0.0, 
+            'land_down_payment_pct': 0.0, 
+            'land_installments': 1, 
+            'land_interest_rate': 8.0,
+            'monthly_land_plot_parcel': 0.0, # Parcela mensal por terreno (para novos módulos)
+        },
+        'strategy': { # Nova seção para a estratégia de terreno (comprado/alugado/intercalado)
+            'land_strategy': 'owned' # 'owned', 'rented', 'alternate'
+        }
     }
 if 'simulation_df' not in st.session_state:
     st.session_state.simulation_df = pd.DataFrame()
@@ -102,7 +129,8 @@ def calculate_summary_metrics(df):
         summary["net_profit"] = net_profit
     break_even_df = df[df['Patrimônio Líquido'] >= df['Investimento Total Acumulado']]
     if not break_even_df.empty:
-        summary["break_even_month"] = int(break_even_df.iloc[0]['Mês'])
+        break_even_month = int(break_even_df.iloc[0]['Mês'])
+        summary["break_even_month"] = f"Mês {break_even_month}"
     return summary
 
 def df_to_excel_bytes(df: pd.DataFrame):
@@ -140,9 +168,10 @@ def compute_cache_key(cfg: dict) -> str:
     return hashlib.md5(payload.encode("utf-8")).hexdigest()
 
 def compute_initial_investment_total(cfg):
-    r = cfg['rented']; o = cfg['owned']
-    total = r['modules_init'] * r['cost_per_module'] + o['modules_init'] * o['cost_per_module']
-    if o.get('land_total_value', 0) > 0:
+    g = cfg['global']; o = cfg['owned']
+    # Investimento inicial = (Módulos iniciais * Custo por módulo) + Entrada do terreno (se comprado)
+    total = g['modules_init'] * g['cost_per_module']
+    if cfg['strategy']['land_strategy'] in ['owned', 'alternate'] and o.get('land_total_value', 0) > 0:
         total += o['land_total_value'] * (o.get('land_down_payment_pct', 0) / 100.0)
     return total
 
@@ -234,77 +263,124 @@ st.markdown(f"""
             transition: transform .25s ease;
         }}
         .kpi-card-modern:hover {{ transform: translateY(-4px); }}
-        .kpi-card-title-modern {{ font-size: .95rem; font-weight: 600; opacity: .95; margin-top: .35rem; }}
-        .kpi-card-value-modern {{ font-size: 1.8rem; font-weight: 800; line-height: 1.1; }}
-        .kpi-card-subtitle {{ font-size: .82rem; opacity: .9; margin-top: .25rem; }}
-        /* Report Metric Cards */
+        .kpi-card-title-modern {{ font-size: 0.8rem; opacity: 0.8; font-weight: 600; margin-top: 0.2rem; }}
+        .kpi-card-value-modern {{ font-size: 1.5rem; font-weight: 800; line-height: 1.2; }}
+        /* Report Metric Card */
         .report-metric-card {{
-            background: {CARD_COLOR}; border: 1px solid {TABLE_BORDER_COLOR}; border-radius: 8px; 
-            padding: 1rem; margin-bottom: 0.5rem; text-align: center;
+            background: #F8F9FA; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.75rem;
+            border-left: 4px solid {PRIMARY_COLOR};
         }}
-        .report-metric-title {{ font-size: 0.85rem; color: {MUTED_TEXT_COLOR}; font-weight: 600; margin-bottom: 0.25rem; }}
-        .report-metric-value {{ font-size: 1.2rem; color: {TEXT_COLOR}; font-weight: 700; }}
+        .report-metric-title {{ font-size: 0.8rem; color: {MUTED_TEXT_COLOR}; font-weight: 600; }}
+        .report-metric-value {{ font-size: 1.1rem; color: {TEXT_COLOR}; font-weight: 700; }}
+        /* Custom list style for contributions/withdrawals */
+        .list-item {{
+            background: #F8F9FA; border-radius: 4px; padding: 0.5rem; margin-bottom: 0.5rem;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.9rem;
+        }}
+        .list-item-value {{ font-weight: 700; color: {PRIMARY_COLOR}; }}
     </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Motor de Simulação
+# Funções de Simulação
 # ---------------------------
-@st.cache_data(show_spinner=False)
-def simulate(_config, reinvestment_strategy, cache_key: str):
-    cfg_rented = _config['rented']
-    cfg_owned  = _config['owned']
-    cfg_global = _config['global']
+@st.cache_data(show_spinner="Calculando simulação...", max_entries=10, ttl=3600)
+def run_simulation(cfg: dict):
+    cfg_global = cfg['global']
+    cfg_owned = cfg['owned']
+    cfg_rented = cfg['rented']
+    cfg_strategy = cfg['strategy']
+
+    # Parâmetros Globais
     months = cfg_global['years'] * 12
-    rows = []
-    modules_rented = cfg_rented['modules_init']
-    modules_owned  = cfg_owned['modules_init']
+    correction_rate_pct = cfg_global['general_correction_rate'] / 100.0
+    land_appreciation_rate_pct = cfg_global['land_appreciation_rate'] / 100.0
+    reinvestment_strategy = cfg_global['reinvestment_strategy']
+    
+    # Valores por Módulo (Globais)
+    custo_modulo_atual = cfg_global['cost_per_module']
+    receita_p_mod = cfg_global['revenue_per_module']
+    manut_p_mod = cfg_global['maintenance_per_module']
+    
+    # Parâmetros de Terreno Alugado
+    aluguel_p_mod = cfg_rented['rent_value']
+    aluguel_p_novo_mod = cfg_rented['rent_per_new_module']
+    
+    # Parâmetros de Terreno Comprado
+    valor_compra_terreno = cfg_owned.get('land_total_value', 0.0)
+    parcela_p_novo_terreno = cfg_owned.get('monthly_land_plot_parcel', 0.0)
+
+    # Estado Inicial
+    modules_init = cfg_global['modules_init']
+    
+    # Inicialização de variáveis
+    modules_owned = 0
+    modules_rented = 0
+    
+    # Distribuição inicial dos módulos baseada na estratégia
+    land_strategy = cfg_strategy['land_strategy']
+    if land_strategy == 'owned':
+        modules_owned = modules_init
+    elif land_strategy == 'rented':
+        modules_rented = modules_init
+    elif land_strategy == 'alternate':
+        # Para módulos iniciais, assumimos que são comprados (se houver financiamento) ou alugados (se não houver)
+        # Simplificando, vamos assumir que o "alternate" só se aplica ao reinvestimento, e o inicial segue a regra do "owned" se houver valor de terreno, senão "rented".
+        # No entanto, a lógica do usuário é que o "alternate" é uma opção de *estratégia de terreno*.
+        # Para a simulação, vamos manter a lógica de reinvestimento, mas para o inicial, se houver valor de terreno, é comprado.
+        if valor_compra_terreno > 0:
+            modules_owned = modules_init
+        else:
+            modules_rented = modules_init
+    
     caixa = 0.0
-    investimento_total = (
-        modules_rented * cfg_rented['cost_per_module'] +
-        modules_owned  * cfg_owned['cost_per_module']
-    )
-    historical_value_rented = modules_rented * cfg_rented['cost_per_module']
-    historical_value_owned  = modules_owned  * cfg_owned['cost_per_module']
-    fundo_ac = 0.0
-    retiradas_ac = 0.0
-    correction_rate_pct = cfg_global.get('general_correction_rate', 0.0) / 100.0
-    land_appreciation_rate_pct = cfg_global.get('land_appreciation_rate', 3.0) / 100.0
-    custo_modulo_atual_rented = cfg_rented['cost_per_module']
-    custo_modulo_atual_owned  = cfg_owned['cost_per_module']
-    receita_p_mod_rented      = cfg_rented['revenue_per_module']
-    receita_p_mod_owned       = cfg_owned['revenue_per_module']
-    manut_p_mod_rented        = cfg_rented['maintenance_per_module']
-    manut_p_mod_owned         = cfg_owned['maintenance_per_module']
-    aluguel_p_novo_mod        = cfg_rented['rent_value']
-    parcela_p_novo_terreno    = cfg_owned['monthly_land_plot_parcel']
-    aluguel_mensal_corrente = cfg_rented['rent_value'] * (cfg_rented['modules_init'] + 1) # O custo do aluguel é por módulo alugado (incluindo o inicial)
-    parcelas_terrenos_novos_mensal_corrente = 0.0
+    investimento_total = 0.0
+    historical_value_owned = modules_owned * custo_modulo_atual
+    historical_value_rented = modules_rented * custo_modulo_atual
+    
+    investimento_total += historical_value_owned + historical_value_rented
+    
+    # Financiamento Terreno Inicial (apenas se a estratégia inicial for 'owned' ou 'alternate' e houver valor de terreno)
     saldo_financiamento_terreno = 0.0
     equity_terreno_inicial = 0.0
     juros_acumulados = 0.0
     amortizacao_acumulada = 0.0
-    valor_compra_terreno = 0.0
-    taxa_juros_mensal = 0.0
-    amortizacao_mensal = 0.0
     aluguel_acumulado = 0.0
     parcelas_novas_acumuladas = 0.0
     
-    # Inicialização do financiamento do terreno
-    if cfg_owned['land_total_value'] > 0:
-        valor_compra_terreno = cfg_owned['land_total_value']
-        valor_entrada_terreno = cfg_owned['land_total_value'] * (cfg_owned['land_down_payment_pct'] / 100.0)
-        valor_financiado = cfg_owned['land_total_value'] - valor_entrada_terreno
+    aluguel_mensal_corrente = modules_rented * aluguel_p_mod
+    parcelas_terrenos_novos_mensal_corrente = modules_owned * parcela_p_novo_terreno
+
+    if land_strategy in ['owned', 'alternate'] and valor_compra_terreno > 0:
+        valor_entrada_terreno = valor_compra_terreno * (cfg_owned.get('land_down_payment_pct', 0.0) / 100.0)
+        valor_financiado = valor_compra_terreno - valor_entrada_terreno
         saldo_financiamento_terreno = valor_financiado
-        equity_terreno_inicial = valor_entrada_terreno
+        
+        amortizacao_mensal = 0.0
+        taxa_juros_mensal = 0.0
+        
         if cfg_owned['land_installments'] > 0:
             amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
             taxa_juros_mensal = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
         investimento_total += valor_entrada_terreno
     
+    fundo_ac = 0.0
+    retiradas_ac = 0.0
+    rows = []
+    
+    # Variáveis anuais para correção
+    custo_modulo_atual_corrigido = custo_modulo_atual
+    receita_p_mod_corrigida = receita_p_mod
+    manut_p_mod_corrigida = manut_p_mod
+    aluguel_p_mod_corrigido = aluguel_p_mod
+    aluguel_p_novo_mod_corrigido = aluguel_p_novo_mod
+    parcela_p_novo_terreno_corrigido = parcela_p_novo_terreno
+
     for m in range(1, months + 1):
-        receita = (modules_rented * receita_p_mod_rented) + (modules_owned * receita_p_mod_owned)
-        manut   = (modules_rented * manut_p_mod_rented)   + (modules_owned * manut_p_mod_owned)
+        # Receita e Manutenção usam os valores corrigidos e são aplicados a TODOS os módulos
+        receita = (modules_owned + modules_rented) * receita_p_mod_corrigida
+        manut   = (modules_owned + modules_rented) * manut_p_mod_corrigida
         novos_modulos_comprados = 0
         
         # Aportes
@@ -312,7 +388,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         caixa += aporte_mes
         investimento_total += aporte_mes
         
-        # Operacional
+        # Gastos Operacionais (Aluguel + Parcelas de Terrenos Novos)
         gastos_operacionais = aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente
         lucro_operacional = receita - manut - gastos_operacionais
         
@@ -353,7 +429,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
                 retirada_mes_efetiva = cfg_global['max_withdraw_value']
                 # O fundo continua sendo calculado sobre a base total, mas a retirada é limitada.
-                # A base de cálculo para o fundo é o lucro distribuível.
                 fundo_mes_total = fundo_potencial
             else:
                 retirada_mes_efetiva = retirada_potencial
@@ -362,7 +437,6 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             total_distrib = retirada_mes_efetiva + fundo_mes_total
             
             # 2. Limitar a distribuição ao caixa disponível (após todas as entradas e saídas)
-            # O caixa já foi atualizado com lucro_operacional e subtraído da parcela_terreno_inicial_mes
             caixa_apos_operacional = caixa 
             
             if total_distrib > caixa_apos_operacional:
@@ -386,58 +460,43 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         
         # Reinvestimento anual
         if m % 12 == 0:
-            if reinvestment_strategy == 'buy':
-                custo = custo_modulo_atual_owned
-                if caixa >= custo > 0:
-                    novos_modulos_comprados = int(caixa // custo)
-                    if novos_modulos_comprados > 0:
-                        custo_da_compra = novos_modulos_comprados * custo
-                        caixa -= custo_da_compra
-                        investimento_total += custo_da_compra
+            # A estratégia de reinvestimento agora usa a estratégia de terreno (land_strategy)
+            alvo = land_strategy
+            if land_strategy == 'alternate':
+                # Alterna entre 'owned' e 'rented' a cada ano
+                alvo = 'owned' if ((m // 12) % 2 == 0) else 'rented'
+                
+            # O custo do módulo é o mesmo para ambos
+            custo = custo_modulo_atual_corrigido
+            
+            if caixa >= custo > 0:
+                novos_modulos_comprados = int(caixa // custo)
+                if novos_modulos_comprados > 0:
+                    custo_da_compra = novos_modulos_comprados * custo
+                    caixa -= custo_da_compra
+                    investimento_total += custo_da_compra
+                    
+                    if alvo == 'owned':
                         historical_value_owned += custo_da_compra
                         modules_owned += novos_modulos_comprados
-                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
-            elif reinvestment_strategy == 'rent':
-                custo = custo_modulo_atual_rented
-                if caixa >= custo > 0:
-                    novos_modulos_comprados = int(caixa // custo)
-                    if novos_modulos_comprados > 0:
-                        custo_da_compra = novos_modulos_comprados * custo
-                        caixa -= custo_da_compra
-                        investimento_total += custo_da_compra
+                        # Adiciona a parcela mensal do terreno para os novos módulos comprados
+                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno_corrigido
+                    else: # 'rented'
                         historical_value_rented += custo_da_compra
                         modules_rented += novos_modulos_comprados
-                        aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
-            elif reinvestment_strategy == 'alternate':
-                alvo = 'buy' if ((m // 12) % 2 == 0) else 'rent'
-                custo = custo_modulo_atual_owned if alvo == 'buy' else custo_modulo_atual_rented
-                if caixa >= custo > 0:
-                    novos_modulos_comprados = int(caixa // custo)
-                    if novos_modulos_comprados > 0:
-                        custo_da_compra = novos_modulos_comprados * custo
-                        caixa -= custo_da_compra
-                        investimento_total += custo_da_compra
-                        if alvo == 'buy':
-                            historical_value_owned += custo_da_compra
-                            modules_owned += novos_modulos_comprados
-                            parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
-                        else:
-                            historical_value_rented += custo_da_compra
-                            modules_rented += novos_modulos_comprados
-                            aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod
+                        # Adiciona o aluguel mensal para os novos módulos alugados
+                        aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod_corrigido
             
             # Correção anual
             correction_factor = 1 + correction_rate_pct
-            custo_modulo_atual_owned  *= correction_factor
-            custo_modulo_atual_rented *= correction_factor
-            receita_p_mod_rented      *= correction_factor
-            receita_p_mod_owned       *= correction_factor
-            manut_p_mod_rented        *= correction_factor
-            manut_p_mod_owned         *= correction_factor
-            aluguel_mensal_corrente   *= correction_factor
-            parcelas_terrenos_novos_mensal_corrente *= correction_factor
-            parcela_p_novo_terreno    *= correction_factor
-            aluguel_p_novo_mod        *= correction_factor
+            custo_modulo_atual_corrigido  *= correction_factor
+            receita_p_mod_corrigida       *= correction_factor
+            manut_p_mod_corrigida         *= correction_factor
+            aluguel_mensal_corrente       *= correction_factor # O aluguel corrente (total) é corrigido
+            parcelas_terrenos_novos_mensal_corrente *= correction_factor # A parcela corrente (total) é corrigida
+            aluguel_p_mod_corrigido       *= correction_factor # O valor unitário do aluguel inicial é corrigido
+            aluguel_p_novo_mod_corrigido  *= correction_factor # O valor unitário do aluguel novo é corrigido
+            parcela_p_novo_terreno_corrigido *= correction_factor # O valor unitário da parcela nova é corrigido
         
         # Patrimônio
         valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12)) if valor_compra_terreno > 0 else 0
@@ -487,334 +546,308 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
 # Estado Inicial
 # ---------------------------
 def get_default_config():
+    # Retorna a configuração padrão com os novos campos globais
     return {
-        'rented': {
-            'modules_init': 1,
+        'global': {
+            'years': 10, 
+            'general_correction_rate': 3.0, 
+            'max_withdraw_value': 0.0, 
+            'land_appreciation_rate': 3.0, 
+            'contributions': [], 
+            'withdrawals': [], 
+            'reserve_funds': [], 
+            'reinvestment_strategy': 'buy',
             'cost_per_module': 75000.0,
             'revenue_per_module': 4500.0,
             'maintenance_per_module': 200.0,
+            'modules_init': 1,
+        },
+        'rented': {
             'rent_value': 750.0,
             'rent_per_new_module': 950.0
         },
         'owned': {
-            'modules_init': 0,
-            'cost_per_module': 75000.0,
-            'revenue_per_module': 4500.0,
-            'maintenance_per_module': 200.0,
-            'monthly_land_plot_parcel': 200.0,
-            'land_total_value': 0.0,
-            'land_down_payment_pct': 20.0,
-            'land_installments': 120,
-            'land_interest_rate': 8.0
+            'land_total_value': 100000.0, 
+            'land_down_payment_pct': 20.0, 
+            'land_installments': 120, 
+            'land_interest_rate': 8.0,
+            'monthly_land_plot_parcel': 1500.0,
         },
-        'global': {
-            'years': 15,
-            'max_withdraw_value': 50000.0,
-            'general_correction_rate': 5.0,
-            'land_appreciation_rate': 3.0,
-            'contributions': [],
-            'withdrawals': [],
-            'reserve_funds': []
+        'strategy': {
+            'land_strategy': 'owned'
         }
     }
 
-if 'config' not in st.session_state:
-    st.session_state.config = get_default_config()
-if 'simulation_df' not in st.session_state:
-    st.session_state.simulation_df = pd.DataFrame()
-if 'comparison_df' not in st.session_state:
-    st.session_state.comparison_df = pd.DataFrame()
-if 'selected_strategy' not in st.session_state:
-    st.session_state.selected_strategy = 'buy'
+# ---------------------------
+# Estrutura do Aplicativo Streamlit
+# ---------------------------
+st.markdown("<div class='header'><div class='header-title'>Simulador Financeiro de Investimentos</div><div class='header-sub'>Análise de Viabilidade de Projetos de Geração de Energia</div></div>", unsafe_allow_html=True)
 
-# ---------------------------
-# Header (fiel à imagem)
-# ---------------------------
-with st.container():
-    st.markdown("""
-        <div class="header">
-            <h1 class="header-title">📊 Simulador Financeiro de Investimentos</h1>
-            <p class="header-sub">Compare estratégias, analise terrenos próprios vs alugados e projete seu crescimento</p>
-        </div>
-    """, unsafe_allow_html=True)
+# Barra de Investimento Inicial no topo (conforme solicitado)
+if not st.session_state.simulation_df.empty:
+    total_invest = st.session_state.simulation_df.iloc[-1]['Investimento Total Acumulado']
+else:
+    total_invest = compute_initial_investment_total(st.session_state.config)
 
-# ---------------------------
-# Abas
-# ---------------------------
-tab_config, tab_transactions, tab_results, tab_data = st.tabs([
-    "⚙️ Configurações",
-    "💰 Transações",
-    "📈 Resultados",
-    "📋 Planilha"
-])
+st.markdown(f"""
+    <div class="invest-strip">
+        <span>💰 Investimento Inicial Total:</span>
+        <span>{fmt_brl(total_invest)}</span>
+    </div>
+""", unsafe_allow_html=True)
+
+# Tabs
+tab_config, tab_simul, tab_data = st.tabs(["⚙️ Configurações", "📈 Simulação", "📋 Dados"])
 
 # ---------------------------
 # CONFIGURAÇÕES (aba)
 # ---------------------------
 with tab_config:
-    cfg = st.session_state.config
-    st.markdown("<h3 class='section-title'>⚙️ Configuração do Investimento</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 class='section-title'>Parâmetros de Simulação</h3>", unsafe_allow_html=True)
+    
+    # --- CARD 1: Parâmetros Globais + Valores por Módulo ---
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("#### 🌍 Parâmetros Globais e Valores do Módulo")
+    
+    cfg_g = st.session_state.config['global']
     
     c1, c2, c3 = st.columns(3)
     
     with c1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### 🏢 Terreno Alugado")
-        r = cfg['rented']
-        r['modules_init'] = st.number_input("Módulos iniciais (alugados)", 0, value=r['modules_init'], key="rent_mod_init")
-        r['cost_per_module'] = st.number_input("Custo por módulo (R$)", 0.0, value=r['cost_per_module'], format="%.2f", key="rent_cost_mod")
-        r['revenue_per_module'] = st.number_input("Receita mensal/módulo (R$)", 0.0, value=r['revenue_per_module'], format="%.2f", key="rent_rev_mod")
-        r['maintenance_per_module'] = st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=r['maintenance_per_module'], format="%.2f", key="rent_maint_mod")
-        r['rent_value'] = st.number_input("Aluguel mensal fixo (R$)", 0.0, value=r['rent_value'], format="%.2f", key="rent_base_rent")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
+        cfg_g['years'] = st.number_input("Duração da Simulação (Anos)", min_value=1, max_value=30, value=cfg_g['years'], step=1, key="cfg_years")
+        cfg_g['general_correction_rate'] = st.number_input("Taxa de Correção Geral Anual (%)", min_value=0.0, value=cfg_g['general_correction_rate'], step=0.1, format="%.2f", key="cfg_correction_rate")
+        cfg_g['modules_init'] = st.number_input("Módulos Iniciais (Total)", min_value=1, value=cfg_g['modules_init'], step=1, key="cfg_modules_init")
+        
     with c2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### 🏠 Terreno Próprio")
-        o = cfg['owned']
-        st.markdown("##### Financiamento do Terreno Inicial")
-        o['land_total_value'] = st.number_input("Valor total do terreno (R$)", 0.0, value=o['land_total_value'], format="%.2f", key="own_total_land_val")
-        
-        primeira_parcela = 0.0
-        if o['land_total_value'] > 0:
-            o['land_down_payment_pct'] = st.number_input("Entrada (%)", 0.0, 100.0, value=o['land_down_payment_pct'], format="%.1f", key="own_down_pay")
-            o['land_installments'] = st.number_input("Parcelas (qtd.)", 1, 480, value=o['land_installments'], key="own_install")
-            o['land_interest_rate'] = st.number_input("Juros anual (%)", 0.0, 50.0, value=o.get('land_interest_rate', 8.0), format="%.1f", key="own_interest")
-            
-            valor_entrada = o['land_total_value'] * (o['land_down_payment_pct'] / 100.0)
-            valor_financiado = o['land_total_value'] - valor_entrada
-            taxa_juros_mensal = (o['land_interest_rate'] / 100.0) / 12
-            amortizacao_mensal = valor_financiado / o['land_installments'] if o['land_installments'] > 0 else 0
-            primeira_parcela = amortizacao_mensal + (valor_financiado * taxa_juros_mensal) if o['land_installments'] > 0 else 0
-            
-            cA, cB = st.columns(2)
-            with cA: st.metric("Valor da Entrada", fmt_brl(valor_entrada))
-            with cB: st.metric("1ª Parcela Estimada", fmt_brl(primeira_parcela))
-        
-        st.markdown("##### Módulos Próprios")
-        o['modules_init'] = st.number_input("Módulos iniciais (próprios)", 0, value=o['modules_init'], key="own_mod_init")
-        
-        # Campos vinculados ao Terreno Alugado e não-editáveis
-        o['cost_per_module'] = r['cost_per_module']
-        st.number_input("Custo por módulo (R$)", 0.0, value=o['cost_per_module'], format="%.2f", key="own_cost_mod", disabled=True)
-        
-        o['revenue_per_module'] = r['revenue_per_module']
-        st.number_input("Receita mensal/módulo (R$)", 0.0, value=o['revenue_per_module'], format="%.2f", key="own_rev_mod", disabled=True)
-        
-        o['maintenance_per_module'] = r['maintenance_per_module']
-        st.number_input("Manutenção mensal/módulo (R$)", 0.0, value=o['maintenance_per_module'], format="%.2f", key="own_maint_mod", disabled=True)
-        
-        # Campo Parcela mensal por novo terreno (R$) - vinculado à 1ª Parcela Estimada
-        o['monthly_land_plot_parcel'] = primeira_parcela
-        st.number_input("Parcela mensal por novo terreno (R$)", 0.0, value=o['monthly_land_plot_parcel'], format="%.2f", key="own_land_parcel", disabled=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
+        cfg_g['cost_per_module'] = st.number_input("Custo por Módulo (R$)", min_value=0.0, value=cfg_g['cost_per_module'], step=100.0, format="%.2f", key="cfg_cost_per_module")
+        cfg_g['revenue_per_module'] = st.number_input("Receita Mensal/Módulo (R$)", min_value=0.0, value=cfg_g['revenue_per_module'], step=10.0, format="%.2f", key="cfg_revenue_per_module")
+        cfg_g['maintenance_per_module'] = st.number_input("Manutenção Mensal/Módulo (R$)", min_value=0.0, value=cfg_g['maintenance_per_module'], step=1.0, format="%.2f", key="cfg_maintenance_per_module")
+
     with c3:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("#### 🌐 Parâmetros Globais")
-        g = cfg['global']
-        g['years'] = st.number_input("Anos de projeção", 1, 50, value=g['years'], key="glob_years")
-        g['general_correction_rate'] = st.number_input("Correção anual geral (%)", 0.0, 50.0, value=g['general_correction_rate'], format="%.1f", key="glob_correction")
-        g['max_withdraw_value'] = st.number_input("Retirada máxima mensal (R$)", 0.0, value=g['max_withdraw_value'], format="%.2f", key="glob_max_withdraw")
-        g['land_appreciation_rate'] = st.number_input("Valorização anual do terreno (%)", 0.0, 50.0, value=g.get('land_appreciation_rate', 3.0), format="%.1f", key="glob_land_appr")
+        cfg_g['land_appreciation_rate'] = st.number_input("Taxa de Valorização do Terreno Anual (%)", min_value=0.0, value=cfg_g['land_appreciation_rate'], step=0.1, format="%.2f", key="cfg_land_appreciation_rate")
+        cfg_g['max_withdraw_value'] = st.number_input("Limite Máximo de Retirada Mensal (R$)", min_value=0.0, value=cfg_g['max_withdraw_value'], step=100.0, format="%.2f", key="cfg_max_withdraw_value")
         
-        st.markdown("##### 🔄 Estratégia de Reinvestimento")
-        reinvestment_strategy = st.selectbox(
-            "Como reinvestir o lucro?",
-            ["buy", "rent", "alternate"],
-            format_func=lambda x: {"buy":"Comprar módulos próprios","rent":"Alugar novos módulos","alternate":"Alternar entre comprar e alugar"}[x],
-            key="reinvestment_strategy",
-            on_change=lambda: st.session_state.config['global'].update({'reinvestment_strategy': st.session_state.reinvestment_strategy})
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    # Faixa de Investimento Inicial Total
-    invest_inicial = compute_initial_investment_total(cfg)
-    st.markdown(f"""
-        <div class="invest-strip">
-            <span>Investimento Inicial Total</span>
-            <span>{fmt_brl(invest_inicial)}</span>
-        </div>
-    """, unsafe_allow_html=True)
+    # --- CARD 2: Estratégia de Terreno e Reinvestimento ---
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("#### 🏡 Estratégia de Terreno e Reinvestimento")
     
-    st.info("💡 Configure as transações na aba **Transações** e clique em **Executar Simulação** para iniciar a projeção.")
-
-# ---------------------------
-# TRANSAÇÕES (aba)
-# ---------------------------
-with tab_transactions:
-    st.markdown("<h3 class='section-title'>💰 Gerenciador de Transações</h3>", unsafe_allow_html=True)
-    cfg = st.session_state.config
-    g = cfg['global']
+    cfg_s = st.session_state.config['strategy']
+    cfg_o = st.session_state.config['owned']
+    cfg_r = st.session_state.config['rented']
     
-    # Garantir que as listas existem
-    if 'contributions' not in g:
-        g['contributions'] = []
-    if 'withdrawals' not in g:
-        g['withdrawals'] = []
-    if 'reserve_funds' not in g:
-        g['reserve_funds'] = []
-
-    st.markdown("#### 💸 Aportes de Investimento")
-    colA, colB = st.columns([1,2])
-    with colA:
-        ap_mes = st.number_input("Mês", 1, g['years']*12, 1, key="trans_aporte_mes")
-    with colB:
-        ap_val = st.number_input("Valor (R$)", 0.0, key="trans_aporte_valor")
-    if st.button("➕ Adicionar Aporte", key="btn_trans_add_aporte"):
-        g['contributions'].append({"mes": ap_mes, "valor": ap_val})
-        st.session_state.config_changed = True
-        st.rerun()
-    if g['contributions']:
-        st.markdown("**Aportes agendados:**")
-        for i, a in enumerate(g['contributions']):
-            cA, cB, cC = st.columns([3,2,1])
-            cA.write(f"Mês {a['mes']}")
-            cB.write(f"{fmt_brl(a['valor'])}")
-            if cC.button("🗑️", key=f"trans_del_aporte_{i}"):
-                g['contributions'].pop(i)
-                st.session_state.config_changed = True
-                st.rerun()
-
+    # Seleção da Estratégia de Terreno
+    land_options = {
+        'owned': 'Terreno Comprado (Financiado ou à Vista)',
+        'rented': 'Terreno Alugado',
+        'alternate': 'Intercalado (Alugado e Comprado)'
+    }
+    cfg_s['land_strategy'] = st.selectbox("Estratégia de Terreno", options=list(land_options.keys()), format_func=lambda x: land_options[x], key="cfg_land_strategy")
+    
+    # Parâmetros de Reinvestimento
     st.markdown("---")
-    st.markdown("#### ↩️ Retiradas")
-    colA, colB = st.columns([1,2])
-    with colA:
-        r_mes = st.number_input("Mês inicial", 1, g['years']*12, 1, key="trans_retirada_mes")
-    with colB:
-        r_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="trans_retirada_pct")
-    if st.button("➕ Adicionar Retirada", key="btn_trans_add_retirada"):
-        g['withdrawals'].append({"mes": r_mes, "percentual": r_pct})
-        st.session_state.config_changed = True
-        st.rerun()
+    st.markdown("##### Estratégia de Reinvestimento do Lucro")
+    reinvest_options = {
+        'buy': 'Comprar Módulos (com Terreno Comprado)',
+        'rent': 'Comprar Módulos (com Terreno Alugado)',
+        'alternate': 'Alternar entre Comprado e Alugado'
+    }
+    cfg_g['reinvestment_strategy'] = st.selectbox("Estratégia para Novos Módulos", options=list(reinvest_options.keys()), format_func=lambda x: reinvest_options[x], key="cfg_reinvestment_strategy")
 
-    if g['withdrawals']:
-        st.markdown("**Regras ativas:**")
-        for i, r_ in enumerate(g['withdrawals']):
-            cA, cB, cC = st.columns([3,2,1])
-            cA.write(f"A partir do mês {r_['mes']}")
-            cB.write(f"{r_['percentual']}%")
-            if cC.button("🗑️", key=f"trans_del_retirada_{i}"):
-                g['withdrawals'].pop(i)
-                st.session_state.config_changed = True
-                st.rerun()
-
-    st.markdown("---")
-    st.markdown("#### 🧱 Fundo de Reserva")
-    colA, colB = st.columns([1,2])
-    with colA:
-        f_mes = st.number_input("Mês inicial", 1, g['years']*12, 1, key="trans_fundo_mes")
-    with colB:
-        f_pct = st.number_input("Percentual do lucro (%)", 0.0, 100.0, key="trans_fundo_pct")
-    if st.button("➕ Adicionar Fundo", key="btn_trans_add_fundo"):
-        g['reserve_funds'].append({"mes": f_mes, "percentual": f_pct})
-        st.session_state.config_changed = True
-        st.rerun()
-
-    if g['reserve_funds']:
-        st.markdown("**Regras ativas:**")
-        for i, f in enumerate(g['reserve_funds']):
-            cA, cB, cC = st.columns([3,2,1])
-            cA.write(f"A partir do mês {f['mes']}")
-            cB.write(f"{f['percentual']}%")
-            if cC.button("🗑️", key=f"trans_del_fundo_{i}"):
-                g['reserve_funds'].pop(i)
-                st.session_state.config_changed = True
-                st.rerun()
-
-    st.markdown("---")
-
-    if st.button("🚀 Executar Simulação", type="primary", use_container_width=True):
-        with st.spinner("Calculando projeção..."):
-            cache_key = compute_cache_key(st.session_state.config)
-            reinvestment_strategy = st.session_state.config['global']['reinvestment_strategy']
-            st.session_state.simulation_df = simulate(st.session_state.config, reinvestment_strategy, cache_key)
-            st.session_state.selected_strategy = reinvestment_strategy
-            st.session_state.config_changed = False # Resetar o flag após simulação
-        st.success("Simulação concluída!")
-# ---------------------------
-# RESULTADOS (aba)
-# ---------------------------
-with tab_results:
-    st.markdown("<h3 class='section-title'>📈 Dashboard de Projeção</h3>", unsafe_allow_html=True)
+    # Campos Específicos para Terreno Alugado (sempre visíveis para 'rented' e 'alternate')
+    if cfg_s['land_strategy'] in ['rented', 'alternate']:
+        st.markdown("---")
+        st.markdown("##### Parâmetros de Terreno Alugado")
+        c4, c5 = st.columns(2)
+        with c4:
+            cfg_r['rent_value'] = st.number_input("Aluguel Mensal por Módulo (R$) - Inicial", min_value=0.0, value=cfg_r['rent_value'], step=10.0, format="%.2f", key="cfg_rent_value")
+        with c5:
+            cfg_r['rent_per_new_module'] = st.number_input("Aluguel Mensal por Módulo (R$) - Novos", min_value=0.0, value=cfg_r['rent_per_new_module'], step=10.0, format="%.2f", key="cfg_rent_per_new_module")
     
-    # Se a configuração mudou (ex: transações), forçar re-execução
-    if st.session_state.config_changed:
-        st.session_state.simulation_df = pd.DataFrame()
-        st.session_state.comparison_df = pd.DataFrame()
-        st.info("As configurações de transação foram alteradas. Execute a simulação novamente.")
+    # Campos Específicos para Terreno Comprado (sempre visíveis para 'owned' e 'alternate')
+    if cfg_s['land_strategy'] in ['owned', 'alternate']:
+        st.markdown("---")
+        st.markdown("##### Parâmetros de Terreno Comprado")
         
-    cfg_copy = deepcopy(st.session_state.config)
-    cache_key = compute_cache_key(cfg_copy)
+        cfg_o['land_total_value'] = st.number_input("Valor Total do Terreno (R$)", min_value=0.0, value=cfg_o['land_total_value'], step=1000.0, format="%.2f", key="cfg_land_total_value")
+        
+        if cfg_o['land_total_value'] > 0:
+            c6, c7 = st.columns(2)
+            with c6:
+                cfg_o['land_down_payment_pct'] = st.number_input("Percentual de Entrada (%)", min_value=0.0, max_value=100.0, value=cfg_o['land_down_payment_pct'], step=1.0, format="%.2f", key="cfg_land_down_payment_pct")
+                cfg_o['land_interest_rate'] = st.number_input("Taxa de Juros Anual (%)", min_value=0.0, value=cfg_o['land_interest_rate'], step=0.1, format="%.2f", key="cfg_land_interest_rate")
+            with c7:
+                cfg_o['land_installments'] = st.number_input("Número de Parcelas (Meses)", min_value=1, value=cfg_o['land_installments'], step=1, key="cfg_land_installments")
+                cfg_o['monthly_land_plot_parcel'] = st.number_input("Parcela Mensal por Terreno (R$) - Novos Módulos", min_value=0.0, value=cfg_o['monthly_land_plot_parcel'], step=10.0, format="%.2f", key="cfg_monthly_land_plot_parcel")
+                
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown("### Estratégias de Reinvestimento")
-    sc1, sc2, sc3, sc4 = st.columns([1,1,1,1.5])
+    # --- CARD 3: Aportes, Retiradas e Fundo de Reserva ---
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("#### 💸 Fluxo de Caixa Adicional")
     
-    with sc1:
-        if st.button("🏠 Comprar Novos", use_container_width=True, type="primary" if st.session_state.selected_strategy == 'buy' else "secondary"):
-            with st.spinner("Calculando..."):
-                st.session_state.simulation_df = simulate(cfg_copy, 'buy', cache_key)
-                st.session_state.comparison_df = pd.DataFrame()
-                st.session_state.selected_strategy = 'buy'
+    # Aportes
+    st.markdown("##### Aportes Programados")
+    c8, c9 = st.columns(2)
+    new_contribution_month = c8.number_input("Mês do Aporte", min_value=1, max_value=cfg_g['years']*12, value=1, step=1, key="new_contribution_month")
+    new_contribution_value = c9.number_input("Valor do Aporte (R$)", min_value=0.0, value=0.0, step=100.0, format="%.2f", key="new_contribution_value")
     
-    with sc2:
-        if st.button("🏢 Alugar Novos", use_container_width=True, type="primary" if st.session_state.selected_strategy == 'rent' else "secondary"):
-            with st.spinner("Calculando..."):
-                st.session_state.simulation_df = simulate(cfg_copy, 'rent', cache_key)
-                st.session_state.comparison_df = pd.DataFrame()
-                st.session_state.selected_strategy = 'rent'
+    if st.button("Adicionar Aporte", key="add_contribution_btn"):
+        if new_contribution_value > 0:
+            cfg_g['contributions'].append({'mes': new_contribution_month, 'valor': new_contribution_value})
+            st.session_state.config_changed = True
+            st.rerun()
     
-    with sc3:
-        if st.button("🔄 Intercalar Novos", use_container_width=True, type="primary" if st.session_state.selected_strategy == 'alternate' else "secondary"):
-            with st.spinner("Calculando..."):
-                st.session_state.simulation_df = simulate(cfg_copy, 'alternate', cache_key)
-                st.session_state.comparison_df = pd.DataFrame()
-                st.session_state.selected_strategy = 'alternate'
+    for i, c in enumerate(cfg_g['contributions']):
+        st.markdown(f"""
+            <div class="list-item">
+                <span>Mês {c['mes']}:</span>
+                <span class="list-item-value">{fmt_brl(c['valor'])}</span>
+                <button onclick="window.parent.document.querySelector('[data-testid=\"stButton\"]').click();" style="background: none; border: none; color: {DANGER_COLOR}; cursor: pointer;" title="Remover" id="remove_contribution_{i}">❌</button>
+            </div>
+        """, unsafe_allow_html=True)
+        # Hack para remover (requer um botão Streamlit real para o callback)
+        if st.button("Remover Aporte", key=f"remove_contribution_{i}"):
+            cfg_g['contributions'].pop(i)
+            st.session_state.config_changed = True
+            st.rerun()
+            
+    # Retiradas
+    st.markdown("---")
+    st.markdown("##### Retiradas (Percentual do Lucro Distribuível)")
+    c10, c11 = st.columns(2)
+    new_withdrawal_month = c10.number_input("Mês de Início da Retirada", min_value=1, max_value=cfg_g['years']*12, value=1, step=1, key="new_withdrawal_month")
+    new_withdrawal_pct = c11.number_input("Percentual de Retirada (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, format="%.2f", key="new_withdrawal_pct")
     
-    with sc4:
-        if st.button("📊 Comparar Todas as Estratégias", use_container_width=True):
-            with st.spinner("Calculando..."):
-                df_buy = simulate(cfg_copy, 'buy', cache_key)
-                df_buy['Estratégia'] = 'Comprar'
-                df_rent = simulate(cfg_copy, 'rent', cache_key)
-                df_rent['Estratégia'] = 'Alugar'
-                df_alt  = simulate(cfg_copy, 'alternate', cache_key)
-                df_alt['Estratégia'] = 'Intercalar'
-                st.session_state.comparison_df = pd.concat([df_buy, df_rent, df_alt], ignore_index=True)
-                st.session_state.simulation_df = pd.DataFrame()
-                st.session_state.selected_strategy = None
+    if st.button("Adicionar Retirada", key="add_withdrawal_btn"):
+        if new_withdrawal_pct > 0:
+            cfg_g['withdrawals'].append({'mes': new_withdrawal_month, 'percentual': new_withdrawal_pct})
+            st.session_state.config_changed = True
+            st.rerun()
+
+    for i, w in enumerate(cfg_g['withdrawals']):
+        st.markdown(f"""
+            <div class="list-item">
+                <span>A partir do Mês {w['mes']}:</span>
+                <span class="list-item-value">{w['percentual']:.2f}%</span>
+                <button onclick="window.parent.document.querySelector('[data-testid=\"stButton\"]').click();" style="background: none; border: none; color: {DANGER_COLOR}; cursor: pointer;" title="Remover" id="remove_withdrawal_{i}">❌</button>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button("Remover Retirada", key=f"remove_withdrawal_{i}"):
+            cfg_g['withdrawals'].pop(i)
+            st.session_state.config_changed = True
+            st.rerun()
+
+    # Fundo de Reserva
+    st.markdown("---")
+    st.markdown("##### Fundo de Reserva (Percentual do Lucro Distribuível)")
+    c12, c13 = st.columns(2)
+    new_reserve_month = c12.number_input("Mês de Início do Fundo", min_value=1, max_value=cfg_g['years']*12, value=1, step=1, key="new_reserve_month")
+    new_reserve_pct = c13.number_input("Percentual do Fundo (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.1, format="%.2f", key="new_reserve_pct")
+    
+    if st.button("Adicionar Fundo", key="add_reserve_btn"):
+        if new_reserve_pct > 0:
+            cfg_g['reserve_funds'].append({'mes': new_reserve_month, 'percentual': new_reserve_pct})
+            st.session_state.config_changed = True
+            st.rerun()
+            
+    for i, r in enumerate(cfg_g['reserve_funds']):
+        st.markdown(f"""
+            <div class="list-item">
+                <span>A partir do Mês {r['mes']}:</span>
+                <span class="list-item-value">{r['percentual']:.2f}%</span>
+                <button onclick="window.parent.document.querySelector('[data-testid=\"stButton\"]').click();" style="background: none; border: none; color: {DANGER_COLOR}; cursor: pointer;" title="Remover" id="remove_reserve_{i}">❌</button>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button("Remover Fundo", key=f"remove_reserve_{i}"):
+            cfg_g['reserve_funds'].pop(i)
+            st.session_state.config_changed = True
+            st.rerun()
+            
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Botão de Simulação
+    st.markdown("---")
+    if st.button("▶️ Executar Simulação", use_container_width=True, key="run_simulation_btn"):
+        st.session_state.simulation_df = run_simulation(st.session_state.config)
+        st.session_state.config_changed = False
+        st.success("Simulação concluída com sucesso!")
+        st.experimental_rerun()
+
+    # Botão de Comparativo
+    if st.button("🔄 Adicionar ao Comparativo", use_container_width=True, key="add_comparison_btn"):
+        if st.session_state.simulation_df.empty:
+            st.warning("Execute a simulação primeiro.")
+        else:
+            strategy_name = st.text_input("Nome da Estratégia para Comparação", value=f"Estratégia {len(st.session_state.comparison_df.get('Estratégia', []).unique()) + 1}", key="comparison_name")
+            
+            # Adiciona a coluna de estratégia
+            df_comp = st.session_state.simulation_df.copy()
+            df_comp['Estratégia'] = strategy_name
+            
+            if st.session_state.comparison_df.empty:
+                st.session_state.comparison_df = df_comp
+            else:
+                # Evita duplicatas se o nome for o mesmo
+                existing_strategies = st.session_state.comparison_df['Estratégia'].unique()
+                if strategy_name in existing_strategies:
+                    st.session_state.comparison_df = st.session_state.comparison_df[st.session_state.comparison_df['Estratégia'] != strategy_name]
+                
+                st.session_state.comparison_df = pd.concat([st.session_state.comparison_df, df_comp], ignore_index=True)
+            
+            st.success(f"Estratégia '{strategy_name}' adicionada ao comparativo!")
+            st.experimental_rerun()
+
+    if not st.session_state.comparison_df.empty:
+        st.markdown("---")
+        st.markdown("##### Gerenciar Comparativo")
+        st.dataframe(st.session_state.comparison_df[['Estratégia']].drop_duplicates(), use_container_width=True, hide_index=True)
+        if st.button("🗑️ Limpar Comparativo", use_container_width=True, key="clear_comparison_btn"):
+            st.session_state.comparison_df = pd.DataFrame()
+            st.success("Comparativo limpo!")
+            st.experimental_rerun()
+
+# ---------------------------
+# SIMULAÇÃO (aba)
+# ---------------------------
+with tab_simul:
+    st.markdown("<h3 class='section-title'>Resultados da Simulação</h3>", unsafe_allow_html=True)
     
     if not st.session_state.comparison_df.empty:
-        st.markdown("### 📈 Análise Comparativa")
+        st.markdown("#### 📊 Comparativo de Estratégias")
+        
         dfc = st.session_state.comparison_df
-        final_buy = dfc[dfc['Estratégia']=='Comprar'].iloc[-1]
-        final_rent= dfc[dfc['Estratégia']=='Alugar' ].iloc[-1]
-        final_alt = dfc[dfc['Estratégia']=='Intercalar'].iloc[-1]
         
-        k1, k2, k3, k4 = st.columns(4)
-        with k1: 
-            render_kpi_card("Comprar", fmt_brl(final_buy['Patrimônio Líquido']), PRIMARY_COLOR, "🏠", "Patrimônio Final")
-        with k2: 
-            render_kpi_card("Alugar", fmt_brl(final_rent['Patrimônio Líquido']), INFO_COLOR, "🏢", "Patrimônio Final")
-        with k3: 
-            render_kpi_card("Intercalar", fmt_brl(final_alt['Patrimônio Líquido']), WARNING_COLOR, "🔄", "Patrimônio Final")
-        with k4:
-            best = pd.Series({
-                'Comprar': final_buy['Patrimônio Líquido'],
-                'Alugar': final_rent['Patrimônio Líquido'],
-                'Intercalar': final_alt['Patrimônio Líquido']
-            }).idxmax()
-            render_kpi_card("Melhor Estratégia", best, SUCCESS_COLOR, "🏆", "Recomendação")
+        # Resumo do comparativo
+        summary_rows = []
+        for strategy in dfc['Estratégia'].unique():
+            df_strat = dfc[dfc['Estratégia'] == strategy]
+            summary = calculate_summary_metrics(df_strat)
+            final = df_strat.iloc[-1]
+            summary_rows.append({
+                "Estratégia": strategy,
+                "Patrimônio Líquido Final": fmt_brl(final['Patrimônio Líquido']),
+                "Investimento Total": fmt_brl(final['Investimento Total Acumulado']),
+                "ROI Total": f"{summary['roi_pct']:.1f}%",
+                "Ponto de Equilíbrio": summary['break_even_month']
+            })
         
-        metric_options = [
-            "Patrimônio Líquido","Módulos Ativos","Retiradas Acumuladas",
-            "Fundo Acumulado","Caixa (Final Mês)","Investimento Total Acumulado"
-        ]
-        selected_metric = st.selectbox("Métrica para comparar", options=metric_options, key="result_metric")
+        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+        
+        # Gráfico de Comparativo
+        metric_options = {
+            "Patrimônio Líquido": "Patrimônio Líquido",
+            "Investimento Total Acumulado": "Investimento Total Acumulado",
+            "Caixa (Final Mês)": "Caixa (Final Mês)",
+            "Receita": "Receita",
+            "Gastos": "Gastos"
+        }
+        selected_metric = st.selectbox("Métrica para Comparação", options=list(metric_options.keys()), format_func=lambda x: metric_options[x], key="comp_metric_select")
         
         fig_comp = px.line(
             dfc, x="Mês", y=selected_metric, color='Estratégia',
-            color_discrete_map={'Comprar': PRIMARY_COLOR, 'Alugar': INFO_COLOR, 'Intercalar': WARNING_COLOR}
+            color_discrete_map={'Comprado': PRIMARY_COLOR, 'Alugado': INFO_COLOR, 'Intercalado': WARNING_COLOR}
         )
         apply_plot_theme(fig_comp, f"Comparativo de {selected_metric}", h=450)
         st.plotly_chart(fig_comp, use_container_width=True)
@@ -833,7 +866,7 @@ with tab_results:
         with k[2]: 
             render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
         with k[3]: 
-            render_kpi_card("Ponto de Equilíbrio", f"Mês {summary['break_even_month']}", WARNING_COLOR, "⚖️")
+            render_kpi_card("Ponto de Equilíbrio", summary['break_even_month'], WARNING_COLOR, "⚖️")
         
         if final['Patrimônio Terreno'] > 0:
             st.markdown("### 🏡 Análise do Terreno")
@@ -920,7 +953,7 @@ with tab_data:
         else:
             df_analysis = base.copy()
         
-        # Análise por ponto no tempo - CORREÇÃO APLICADA
+        # Análise por ponto no tempo
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("#### 📅 Análise por Ponto no Tempo")
         c1, c2 = st.columns(2)
@@ -939,7 +972,7 @@ with tab_data:
             if not filtered.empty:
                 p = filtered.iloc[0] # Pegar a primeira linha (deve ser apenas uma)
                 
-                # CORREÇÃO: Usando colunas nomeadas individualmente
+                # Usando colunas nomeadas individualmente
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     render_report_metric("Módulos Ativos", int(p['Módulos Ativos']))
@@ -968,10 +1001,12 @@ with tab_data:
             cols_to_show = []
             grid = st.columns(3)
             
+            # Remove a lógica de hack de botão para remoção de itens de lista, pois não é necessária aqui.
             for idx, c in enumerate(all_cols):
                 with grid[idx % 3]:
                     tkey = f"toggle_{slug(c)}_{state_key}"
-                    st.session_state[state_key][c] = st.toggle(c, value=st.session_state[state_key][c], key=tkey)
+                    # Usa um nome de chave único para cada toggle
+                    st.session_state[state_key][c] = st.toggle(c, value=st.session_state[state_key].get(c, False), key=tkey)
                     if st.session_state[state_key][c]:
                         cols_to_show.append(c)
             
