@@ -305,7 +305,7 @@ def simulate(_config: dict) -> pd.DataFrame:
     investimento_terrenos_total = valor_entrada_terreno
     parcelas_terrenos_novos_mensal_corrente = 0.0
     saldo_devedor_novos_terrenos = 0.0
-    parcela_p_novo_terreno = cfg_owned['monthly_land_plot_parcel']
+    parcela_p_novo_terreno = cfg_owned.get('monthly_land_plot_parcel', 0.0)
 
     # Variáveis de correção anual
     correction_rate_pct = cfg_global.get('general_correction_rate', 0.0) / 100.0
