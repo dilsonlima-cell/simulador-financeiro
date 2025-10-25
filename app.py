@@ -71,14 +71,15 @@ def render_kpi_card(title, value, bg_color=PRIMARY_COLOR, icon=None, subtitle=No
     icon_html = f'<div style="font-size: 2rem; margin-bottom: 0.5rem;">{icon}</div>' if icon else ""
     subtitle_html = f'<div class="kpi-card-subtitle">{subtitle}</div>' if subtitle else ""
     txt_color = "#0F172A" if dark_text else "#FFFFFF"
-    st.markdown(f'''
-        <div class="kpi-card-modern" style="background:{bg_color}; color:{txt_color};">
-            {icon_html}
-            <div class="kpi-card-value-modern">{value}</div>
-            <div class="kpi-card-title-modern">{title}</div>
-            {subtitle_html}
-        </div>
-    ''', unsafe_allow_html=True)}],path:
+    html = f"""
+<div class="kpi-card-modern" style="background:{bg_color}; color:{txt_color};">
+    {icon_html}
+    <div class="kpi-card-value-modern">{value}</div>
+    <div class="kpi-card-title-modern">{title}</div>
+    {subtitle_html}
+</div>
+"""
+    st.markdown(html, unsafe_allow_html=True)
 
 def render_report_metric(title, value):
     """Função auxiliar para o cartão de métricas de relatório"""
