@@ -78,7 +78,7 @@ def render_kpi_card(title, value, bg_color=PRIMARY_COLOR, icon=None, subtitle=No
             <div class="kpi-card-title-modern">{title}</div>
             {subtitle_html}
         </div>
-    ''', unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)}],path:
 
 def render_report_metric(title, value):
     """Função auxiliar para o cartão de métricas de relatório"""
