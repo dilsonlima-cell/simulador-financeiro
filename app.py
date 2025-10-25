@@ -502,12 +502,12 @@ with tab_config:
     r = cfg['rented']
     
     invest_inicial = compute_initial_investment_total(cfg)
-    st.markdown(f'''
-        <div class="invest-strip">
-            <span>Investimento Inicial Total</span>
-            <span>{fmt_brl(invest_inicial)}</span>
-        </div>
-    ''', unsafe_allow_html=True)
+    st.markdown(f"""
+<div class="invest-strip">
+    <span>Investimento Inicial Total</span>
+    <span>{fmt_brl(invest_inicial)}</span>
+</div>
+""", unsafe_allow_html=True)
     
     st.markdown("<h3 class='section-title'>⚙️ Configuração do Investimento</h3>", unsafe_allow_html=True)
     
