@@ -43,9 +43,9 @@ CHART_GRID_COLOR  = "#E9ECEF"
 MONEY_COLS = {
     "Receita","Manutenção","Aluguel","Parcela Terreno Inicial","Parcelas Terrenos (Novos)","Gastos",
     "Aporte","Fundo (Mês)","Retirada (Mês)","Caixa (Final Mês)","Investimento Total Acumulado",
-    "Fundo Acumulado","Retiradas Acumuladas    "Patrimônio Líquido","Juros Terreno Inicial",
+    "Fundo Acumulado","Retiradas Acumuladas","Patrimônio Líquido","Juros Terreno Inicial",
     "Amortização Terreno Inicial","Equity Terreno Inicial","Valor de Mercado Terreno",
-    "Dívida Futura (Total)","Investimento em Terrenos","Valor de Mercado (Total)",   "Patrimônio Terreno","Juros Acumulados","Amortização Acumulada","Desembolso Total",
+    "Dívida Futura (Total)","Investimento em Terrenos","Valor de Mercado (Total)","Patrimônio Terreno","Juros Acumulados","Amortização Acumulada","Desembolso Total",
     "Aluguel Acumulado","Parcelas Novas Acumuladas"
 }
 	COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano","Terrenos Adquiridos"}
