@@ -309,6 +309,7 @@ def run_simulation(cfg: dict):
     
     # Parâmetros de Terreno Comprado
     valor_compra_terreno = cfg_owned.get('land_total_value', 0.0)
+    # A parcela por novo terreno é o valor calculado na interface e armazenado em cfg_owned
     parcela_p_novo_terreno = cfg_owned.get('monthly_land_plot_parcel', 0.0)
 
     # Estado Inicial
@@ -325,10 +326,7 @@ def run_simulation(cfg: dict):
     elif land_strategy == 'rented':
         modules_rented = modules_init
     elif land_strategy == 'alternate':
-        # Para módulos iniciais, assumimos que são comprados (se houver financiamento) ou alugados (se não houver)
-        # Simplificando, vamos assumir que o "alternate" só se aplica ao reinvestimento, e o inicial segue a regra do "owned" se houver valor de terreno, senão "rented".
-        # No entanto, a lógica do usuário é que o "alternate" é uma opção de *estratégia de terreno*.
-        # Para a simulação, vamos manter a lógica de reinvestimento, mas para o inicial, se houver valor de terreno, é comprado.
+        # Para a simulação, se houver valor de terreno, considera-se owned, senão rented.
         if valor_compra_terreno > 0:
             modules_owned = modules_init
         else:
@@ -350,6 +348,8 @@ def run_simulation(cfg: dict):
     parcelas_novas_acumuladas = 0.0
     
     aluguel_mensal_corrente = modules_rented * aluguel_p_mod
+    # A parcela mensal corrente inicial é calculada com base na parcela por novo módulo, pois o módulo inicial já tem o terreno
+    # A lógica aqui é que a parcela por novo módulo representa o custo mensal de terreno por módulo.
     parcelas_terrenos_novos_mensal_corrente = modules_owned * parcela_p_novo_terreno
 
     if land_strategy in ['owned', 'alternate'] and valor_compra_terreno > 0:
@@ -361,6 +361,7 @@ def run_simulation(cfg: dict):
         taxa_juros_mensal = 0.0
         
         if cfg_owned['land_installments'] > 0:
+            # O cálculo do financiamento inicial usa o juro
             amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
             taxa_juros_mensal = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
         investimento_total += valor_entrada_terreno
@@ -571,7 +572,7 @@ def get_default_config():
             'land_down_payment_pct': 20.0, 
             'land_installments': 120, 
             'land_interest_rate': 8.0,
-            'monthly_land_plot_parcel': 1500.0,
+            'monthly_land_plot_parcel': 0.0, # Será calculado na interface
         },
         'strategy': {
             'land_strategy': 'owned'
@@ -670,6 +671,7 @@ with tab_config:
         st.markdown("---")
         st.markdown("##### Parâmetros de Terreno Comprado")
         
+        # Campo de Valor Total do Terreno
         cfg_o['land_total_value'] = st.number_input("Valor Total do Terreno (R$)", min_value=0.0, value=cfg_o['land_total_value'], step=1000.0, format="%.2f", key="cfg_land_total_value")
         
         if cfg_o['land_total_value'] > 0:
@@ -678,8 +680,29 @@ with tab_config:
                 cfg_o['land_down_payment_pct'] = st.number_input("Percentual de Entrada (%)", min_value=0.0, max_value=100.0, value=cfg_o['land_down_payment_pct'], step=1.0, format="%.2f", key="cfg_land_down_payment_pct")
                 cfg_o['land_interest_rate'] = st.number_input("Taxa de Juros Anual (%)", min_value=0.0, value=cfg_o['land_interest_rate'], step=0.1, format="%.2f", key="cfg_land_interest_rate")
             with c7:
+                # Campo de Número de Parcelas
+                # O número de parcelas deve ser no mínimo 1 para evitar divisão por zero
                 cfg_o['land_installments'] = st.number_input("Número de Parcelas (Meses)", min_value=1, value=cfg_o['land_installments'], step=1, key="cfg_land_installments")
-                cfg_o['monthly_land_plot_parcel'] = st.number_input("Parcela Mensal por Terreno (R$) - Novos Módulos", min_value=0.0, value=cfg_o['monthly_land_plot_parcel'], step=10.0, format="%.2f", key="cfg_monthly_land_plot_parcel")
+                
+                # CÁLCULO AUTOMÁTICO DA PARCELA MENSAL PARA NOVOS MÓDULOS
+                valor_a_financiar = cfg_o['land_total_value'] * (1 - (cfg_o['land_down_payment_pct'] / 100.0))
+                num_parcelas = max(1, cfg_o['land_installments'])
+                
+                # Cálculo da Parcela (Amortização Simples - Tabela Price não é necessária aqui)
+                # O custo mensal do terreno por módulo é a amortização simples do valor financiado.
+                if num_parcelas > 0:
+                    parcela_calculada = valor_a_financiar / num_parcelas
+                else:
+                    parcela_calculada = 0.0
+                
+                # Atualiza o valor no estado da sessão (será usado na simulação)
+                # st.session_state.config['owned']['monthly_land_plot_parcel'] = parcela_calculada
+                # Atualiza diretamente o cfg_o que é uma referência
+                cfg_o['monthly_land_plot_parcel'] = parcela_calculada
+                
+                # Exibe o valor calculado
+                st.markdown(f"**Parcela Mensal por Terreno (R$) - Novos Módulos**")
+                st.markdown(f"**{fmt_brl(parcela_calculada)}**")
                 
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -699,19 +722,24 @@ with tab_config:
             st.session_state.config_changed = True
             st.rerun()
     
+    # Lógica de remoção de aportes (simplificada)
+    temp_contributions = []
     for i, c in enumerate(cfg_g['contributions']):
-        st.markdown(f"""
+        col_list, col_remove = st.columns([0.8, 0.2])
+        col_list.markdown(f"""
             <div class="list-item">
                 <span>Mês {c['mes']}:</span>
                 <span class="list-item-value">{fmt_brl(c['valor'])}</span>
-                <button onclick="window.parent.document.querySelector('[data-testid=\"stButton\"]').click();" style="background: none; border: none; color: {DANGER_COLOR}; cursor: pointer;" title="Remover" id="remove_contribution_{i}">❌</button>
             </div>
         """, unsafe_allow_html=True)
-        # Hack para remover (requer um botão Streamlit real para o callback)
-        if st.button("Remover Aporte", key=f"remove_contribution_{i}"):
-            cfg_g['contributions'].pop(i)
+        if col_remove.button("Remover", key=f"remove_contribution_{i}"):
             st.session_state.config_changed = True
-            st.rerun()
+        else:
+            temp_contributions.append(c)
+            
+    if len(temp_contributions) != len(cfg_g['contributions']):
+        cfg_g['contributions'] = temp_contributions
+        st.rerun()
             
     # Retiradas
     st.markdown("---")
@@ -726,18 +754,24 @@ with tab_config:
             st.session_state.config_changed = True
             st.rerun()
 
+    # Lógica de remoção de retiradas (simplificada)
+    temp_withdrawals = []
     for i, w in enumerate(cfg_g['withdrawals']):
-        st.markdown(f"""
+        col_list, col_remove = st.columns([0.8, 0.2])
+        col_list.markdown(f"""
             <div class="list-item">
                 <span>A partir do Mês {w['mes']}:</span>
                 <span class="list-item-value">{w['percentual']:.2f}%</span>
-                <button onclick="window.parent.document.querySelector('[data-testid=\"stButton\"]').click();" style="background: none; border: none; color: {DANGER_COLOR}; cursor: pointer;" title="Remover" id="remove_withdrawal_{i}">❌</button>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("Remover Retirada", key=f"remove_withdrawal_{i}"):
-            cfg_g['withdrawals'].pop(i)
+        if col_remove.button("Remover", key=f"remove_withdrawal_{i}"):
             st.session_state.config_changed = True
-            st.rerun()
+        else:
+            temp_withdrawals.append(w)
+            
+    if len(temp_withdrawals) != len(cfg_g['withdrawals']):
+        cfg_g['withdrawals'] = temp_withdrawals
+        st.rerun()
 
     # Fundo de Reserva
     st.markdown("---")
@@ -752,18 +786,24 @@ with tab_config:
             st.session_state.config_changed = True
             st.rerun()
             
+    # Lógica de remoção de fundos (simplificada)
+    temp_reserves = []
     for i, r in enumerate(cfg_g['reserve_funds']):
-        st.markdown(f"""
+        col_list, col_remove = st.columns([0.8, 0.2])
+        col_list.markdown(f"""
             <div class="list-item">
                 <span>A partir do Mês {r['mes']}:</span>
                 <span class="list-item-value">{r['percentual']:.2f}%</span>
-                <button onclick="window.parent.document.querySelector('[data-testid=\"stButton\"]').click();" style="background: none; border: none; color: {DANGER_COLOR}; cursor: pointer;" title="Remover" id="remove_reserve_{i}">❌</button>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("Remover Fundo", key=f"remove_reserve_{i}"):
-            cfg_g['reserve_funds'].pop(i)
+        if col_remove.button("Remover", key=f"remove_reserve_{i}"):
             st.session_state.config_changed = True
-            st.rerun()
+        else:
+            temp_reserves.append(r)
+            
+    if len(temp_reserves) != len(cfg_g['reserve_funds']):
+        cfg_g['reserve_funds'] = temp_reserves
+        st.rerun()
             
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -865,8 +905,11 @@ with tab_simul:
             render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
         with k[2]: 
             render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
+            
+        # Tratamento para Ponto de Equilíbrio
+        break_even_display = summary['break_even_month'] if summary['break_even_month'] != 'N/A' else 'N/A'
         with k[3]: 
-            render_kpi_card("Ponto de Equilíbrio", summary['break_even_month'], WARNING_COLOR, "⚖️")
+            render_kpi_card("Ponto de Equilíbrio", break_even_display, WARNING_COLOR, "⚖️")
         
         if final['Patrimônio Terreno'] > 0:
             st.markdown("### 🏡 Análise do Terreno")
@@ -1001,7 +1044,6 @@ with tab_data:
             cols_to_show = []
             grid = st.columns(3)
             
-            # Remove a lógica de hack de botão para remoção de itens de lista, pois não é necessária aqui.
             for idx, c in enumerate(all_cols):
                 with grid[idx % 3]:
                     tkey = f"toggle_{slug(c)}_{state_key}"
