@@ -43,12 +43,12 @@ CHART_GRID_COLOR  = "#E9ECEF"
 MONEY_COLS = {
     "Receita","Manutenção","Aluguel","Parcela Terreno Inicial","Parcelas Terrenos (Novos)","Gastos",
     "Aporte","Fundo (Mês)","Retirada (Mês)","Caixa (Final Mês)","Investimento Total Acumulado",
-    "Fundo Acumulado","Retiradas Acumuladas","Patrimônio Líquido","Juros Terreno Inicial",
+    "Fundo Acumulado","Retiradas Acumuladas    "Patrimônio Líquido","Juros Terreno Inicial",
     "Amortização Terreno Inicial","Equity Terreno Inicial","Valor de Mercado Terreno",
-    "Patrimônio Terreno","Juros Acumulados","Amortização Acumulada","Desembolso Total",
+    "Dívida Futura (Total)","Investimento em Terrenos","Valor de Mercado (Total)",   "Patrimônio Terreno","Juros Acumulados","Amortização Acumulada","Desembolso Total",
     "Aluguel Acumulado","Parcelas Novas Acumuladas"
 }
-COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano"}
+	COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano","Terrenos Adquiridos"}
 
 # ---------------------------
 # Helpers
@@ -280,6 +280,16 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
     parcela_p_novo_terreno    = cfg_owned['monthly_land_plot_parcel']
     aluguel_mensal_corrente = cfg_rented['rent_value'] * (cfg_rented['modules_init'] + 1) # O custo do aluguel é por módulo alugado (incluindo o inicial)
     parcelas_terrenos_novos_mensal_corrente = 0.0
+    
+    # Novas variáveis para os KPIs de Terreno
+    # Acompanha o saldo devedor de todos os terrenos (inicial + novos)
+    saldo_devedor_terrenos_total = 0.0 
+    # Acompanha o valor de mercado de todos os terrenos (inicial + novos)
+    valor_mercado_terrenos_total = 0.0
+    # Acompanha o número de terrenos adquiridos (inicial + novos)
+    terrenos_adquiridos_count = 0 
+    # Acompanha o investimento total em terrenos (entrada + amortização)
+    investimento_terrenos_total = 0.0
     saldo_financiamento_terreno = 0.0
     equity_terreno_inicial = 0.0
     juros_acumulados = 0.0
@@ -297,6 +307,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
         valor_financiado = cfg_owned['land_total_value'] - valor_entrada_terreno
         saldo_financiamento_terreno = valor_financiado
         equity_terreno_inicial = valor_entrada_terreno
+        terrenos_adquiridos_count = 1 # Terreno inicial
+        investimento_terrenos_total = valor_entrada_terreno # Entrada
+        
         if cfg_owned['land_installments'] > 0:
             amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
             taxa_juros_mensal = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
@@ -329,6 +342,7 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             equity_terreno_inicial += amortizacao_terreno_mes
             juros_acumulados += juros_terreno_mes
             amortizacao_acumulada += amortizacao_terreno_mes
+            investimento_terrenos_total += amortizacao_terreno_mes # Amortização é investimento em terreno
         
         caixa += lucro_operacional
         
@@ -397,6 +411,9 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                         historical_value_owned += custo_da_compra
                         modules_owned += novos_modulos_comprados
                         parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
+                        terrenos_adquiridos_count += novos_modulos_comprados # Cada módulo comprado com terreno próprio representa um novo terreno no modelo simplificado
+                        # No modelo simplificado, assumimos que o valor do terreno é embutido no custo do módulo
+                        investimento_terrenos_total += custo_da_compra # Entrada/Investimento inicial no novo terreno/módulo
             elif reinvestment_strategy == 'rent':
                 custo = custo_modulo_atual_rented
                 if caixa >= custo > 0:
@@ -421,6 +438,8 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
                             historical_value_owned += custo_da_compra
                             modules_owned += novos_modulos_comprados
                             parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno
+                            terrenos_adquiridos_count += novos_modulos_comprados
+                            investimento_terrenos_total += custo_da_compra
                         else:
                             historical_value_rented += custo_da_compra
                             modules_rented += novos_modulos_comprados
@@ -440,10 +459,30 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             aluguel_p_novo_mod        *= correction_factor
         
         # Patrimônio
-        valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12)) if valor_compra_terreno > 0 else 0
-        patrimonio_terreno = valor_mercado_terreno - saldo_financiamento_terreno
+        # Valor de mercado do terreno inicial
+        valor_mercado_terreno_inicial = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12)) if valor_compra_terreno > 0 else 0
+        
+        # Valor de mercado dos terrenos novos (simplificado: custo de compra corrigido pela valorização)
+        # Assumimos que o custo de compra de um módulo próprio inclui o terreno
+        valor_mercado_terrenos_novos = (modules_owned - (1 if valor_compra_terreno > 0 else 0)) * custo_modulo_atual_owned * ((1 + land_appreciation_rate_pct) ** (m / 12))
+        
+        valor_mercado_terrenos_total = valor_mercado_terreno_inicial + valor_mercado_terrenos_novos
+        
+        # Dívida Futura (Simplificado: Saldo devedor do terreno inicial + parcelas futuras dos novos terrenos)
+        # O saldo devedor dos novos terrenos é a soma das parcelas futuras (parcelas_terrenos_novos_mensal_corrente * parcelas_restantes, mas no modelo simplificado, usamos a parcela mensal como proxy para o custo de capital)
+        # Como não temos o saldo devedor dos novos terrenos, vamos usar o saldo devedor do terreno inicial como proxy para a dívida futura.
+        # Dívida Futura (Total) = Saldo Devedor Terreno Inicial + (Parcelas Novas Acumuladas / Mês) * (Parcelas restantes) -> Complexo.
+        # Vamos usar o Saldo Devedor do Terreno Inicial como Dívida Futura, já que é o único financiamento explícito.
+        # Se o usuário quiser o valor total das parcelas a vencer, precisaríamos de uma estrutura de dívida para cada terreno.
+        # Dada a estrutura atual, o melhor proxy para Dívida Futura Total é o saldo devedor do Terreno Inicial.
+        dívida_futura_total = saldo_financiamento_terreno # Saldo devedor do Terreno Inicial
+        
+        patrimonio_terreno = valor_mercado_terreno_inicial - saldo_financiamento_terreno
         ativos  = historical_value_owned + historical_value_rented + caixa + fundo_ac + patrimonio_terreno
-        passivos= saldo_financiamento_terreno
+        passivos= saldo_financiamento_terreno # Passivos é o saldo devedor do terreno inicial.
+        patrimonio_liquido = ativos - passivos
+        desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
+        gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
         patrimonio_liquido = ativos - passivos
         desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
         gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
@@ -472,10 +511,15 @@ def simulate(_config, reinvestment_strategy, cache_key: str):
             "Módulos Comprados no Ano": novos_modulos_comprados,
             "Patrimônio Líquido": patrimonio_liquido,
             "Equity Terreno Inicial": equity_terreno_inicial,
-            "Valor de Mercado Terreno": valor_mercado_terreno,
+            "Valor de Mercado Terreno": valor_mercado_terreno_inicial,
             "Patrimônio Terreno": patrimonio_terreno,
             "Juros Acumulados": juros_acumulados,
             "Amortização Acumulada": amortizacao_acumulada,
+            # Novos KPIs de Terreno
+            "Dívida Futura (Total)": dívida_futura_total,
+            "Investimento em Terrenos": investimento_terrenos_total,
+            "Terrenos Adquiridos": terrenos_adquiridos_count,
+            "Valor de Mercado (Total)": valor_mercado_terrenos_total,
             "Aluguel Acumulado": aluguel_acumulado,
             "Parcelas Novas Acumuladas": parcelas_novas_acumuladas,
             "Desembolso Total": desembolso_total
@@ -839,13 +883,25 @@ with tab_results:
             st.markdown("### 🏡 Análise do Terreno")
             c = st.columns(4)
             with c[0]: 
-                render_kpi_card("Valor de Mercado", fmt_brl(final['Valor de Mercado Terreno']), INFO_COLOR, "🏠")
+                render_kpi_card("Valor de Mercado (Total)", fmt_brl(final['Valor de Mercado (Total)']), INFO_COLOR, "🏠")
             with c[1]: 
-                render_kpi_card("Patrimônio no Terreno", fmt_brl(final['Patrimônio Terreno']), SUCCESS_COLOR, "💰")
+                render_kpi_card("Investimento em Terrenos", fmt_brl(final['Investimento em Terrenos']), SUCCESS_COLOR, "💼")
             with c[2]: 
-                render_kpi_card("Equity Construído", fmt_brl(final['Equity Terreno Inicial']), WARNING_COLOR, "📊")
+                render_kpi_card("Dívida Futura (Total)", fmt_brl(final['Dívida Futura (Total)']), DANGER_COLOR, "💸")
             with c[3]: 
-                render_kpi_card("Juros Pagos", fmt_brl(final['Juros Acumulados']), DANGER_COLOR, "💸")
+                render_kpi_card("Terrenos Adquiridos", f"{int(final['Terrenos Adquiridos'])}", WARNING_COLOR, "🏗️")
+
+            # Manter os KPIs originais de terreno inicial em uma segunda linha para contexto
+            st.markdown("##### Detalhes do Terreno Inicial")
+            c2 = st.columns(4)
+            with c2[0]:
+                render_kpi_card("Valor de Mercado (Inicial)", fmt_brl(final['Valor de Mercado Terreno']), INFO_COLOR, "🏠", dark_text=True)
+            with c2[1]:
+                render_kpi_card("Patrimônio no Terreno", fmt_brl(final['Patrimônio Terreno']), SUCCESS_COLOR, "💰", dark_text=True)
+            with c2[2]:
+                render_kpi_card("Equity Construído", fmt_brl(final['Equity Terreno Inicial']), WARNING_COLOR, "📊", dark_text=True)
+            with c2[3]:
+                render_kpi_card("Juros Acumulados", fmt_brl(final['Juros Acumulados']), DANGER_COLOR, "💸", dark_text=True)
         
         # Gráficos
         g1, g2 = st.columns(2)
