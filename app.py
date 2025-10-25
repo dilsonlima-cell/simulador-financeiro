@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from datetime import date, datetime
-from dateutil.relativedelta import relativedelta if False else None  # placeholder to hint monthly ops
+# from dateutil.relativedelta import relativedelta # placeholder to hint monthly ops
 from io import BytesIO
 
 # =========================================
