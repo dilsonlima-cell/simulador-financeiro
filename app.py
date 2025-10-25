@@ -48,7 +48,7 @@ MONEY_COLS = {
     "Dívida Futura (Total)","Investimento em Terrenos","Valor de Mercado (Total)","Patrimônio Terreno","Juros Acumulados","Amortização Acumulada","Desembolso Total",
     "Aluguel Acumulado","Parcelas Novas Acumuladas"
 }
-	COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano","Terrenos Adquiridos"}
+COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano","Terrenos Adquiridos"}
 
 # ---------------------------
 # Helpers
