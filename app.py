@@ -87,12 +87,13 @@ def render_report_metric(title, value):
         formatted_value = f"{value:,}"
     else:
         formatted_value = fmt_brl(value)
-    st.markdown(f'''
-        <div class="report-metric-card">
-            <div class="report-metric-title">{title}</div>
-            <div class="report-metric-value">{formatted_value}</div>
-        </div>
-    ''', unsafe_allow_html=True)
+    html = f"""
+<div class="report-metric-card">
+    <div class="report-metric-title">{title}</div>
+    <div class="report-metric-value">{formatted_value}</div>
+</div>
+"""
+    st.markdown(html, unsafe_allow_html=True)
 
 def calculate_summary_metrics(df):
     summary = {"roi_pct": 0, "break_even_month": "N/A", "total_investment": 0, "net_profit": 0}
