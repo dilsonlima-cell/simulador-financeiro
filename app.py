@@ -532,6 +532,10 @@ def run_simulation(cfg: dict):
         # A quantidade de terrenos é igual à quantidade de módulos próprios
         terrenos_adquiridos = modules_owned
         
+        # Total de Riqueza Gerada = Patrimônio Líquido - Investimento Total Acumulado
+        # Representa o ganho líquido gerado pelo investimento
+        riqueza_gerada = patrimonio_liquido - investimento_total
+        
         rows.append({
             "Mês": m,
             "Ano": (m - 1) // 12 + 1,
@@ -567,7 +571,8 @@ def run_simulation(cfg: dict):
             "Dívida Futura Total": divida_futura_total,
             "Investimento em Terrenos": investimento_em_terrenos,
             "Terrenos Adquiridos": terrenos_adquiridos,
-            "Valor de Mercado Total": valor_mercado_total
+            "Valor de Mercado Total": valor_mercado_total,
+            "Riqueza Gerada": riqueza_gerada
         })
     
     return pd.DataFrame(rows)
@@ -1033,17 +1038,19 @@ with tab_simul:
         summary = calculate_summary_metrics(df)
         
         st.markdown("### 📊 Indicadores Principais")
-        k = st.columns(4)
+        k = st.columns(5)
         with k[0]: 
             render_kpi_card("Patrimônio Líquido Final", fmt_brl(final['Patrimônio Líquido']), SUCCESS_COLOR, "💰")
         with k[1]: 
             render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
         with k[2]: 
+            render_kpi_card("Riqueza Gerada", fmt_brl(final['Riqueza Gerada']), "#9333EA", "💎")
+        with k[3]: 
             render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
             
         # Tratamento para Ponto de Equilíbrio
         break_even_display = summary['break_even_month'] if summary['break_even_month'] != 'N/A' else 'N/A'
-        with k[3]: 
+        with k[4]: 
             render_kpi_card("Ponto de Equilíbrio", break_even_display, WARNING_COLOR, "⚖️")
         
         # Novos KPIs
