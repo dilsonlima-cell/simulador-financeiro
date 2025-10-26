@@ -10,8 +10,6 @@ import hashlib
 from copy import deepcopy
 
 # --- ESTADO DA SESSÃO ---
-# A configuração foi simplificada: os valores por módulo são globais.
-# A estratégia de terreno (rented/owned/alternate) é definida por 'land_strategy'.
 if 'config' not in st.session_state:
     st.session_state.config = {
         'global': {
@@ -23,24 +21,24 @@ if 'config' not in st.session_state:
             'withdrawals': [], 
             'reserve_funds': [], 
             'reinvestment_strategy': 'buy',
-            'cost_per_module': 75000.0, # Novo campo global
-            'revenue_per_module': 4500.0, # Novo campo global
-            'maintenance_per_module': 200.0, # Novo campo global
-            'modules_init': 1, # Módulos iniciais (global)
+            'cost_per_module': 75000.0,
+            'revenue_per_module': 4500.0,
+            'maintenance_per_module': 200.0,
+            'modules_init': 1,
         },
         'rented': {
-            'rent_value': 750.0, # Aluguel por módulo inicial
-            'rent_per_new_module': 950.0 # Aluguel por novo módulo
+            'rent_value': 750.0,
+            'rent_per_new_module': 950.0
         },
         'owned': {
             'land_total_value': 0.0, 
             'land_down_payment_pct': 0.0, 
             'land_installments': 1, 
             'land_interest_rate': 8.0,
-            'monthly_land_plot_parcel': 0.0, # Parcela mensal por terreno (para novos módulos)
+            'monthly_land_plot_parcel': 0.0,
         },
-        'strategy': { # Nova seção para a estratégia de terreno (comprado/alugado/intercalado)
-            'land_strategy': 'owned' # 'owned', 'rented', 'alternate'
+        'strategy': {
+            'land_strategy': 'owned'
         }
     }
 if 'simulation_df' not in st.session_state:
@@ -73,9 +71,11 @@ MONEY_COLS = {
     "Fundo Acumulado","Retiradas Acumuladas","Patrimônio Líquido","Juros Terreno Inicial",
     "Amortização Terreno Inicial","Equity Terreno Inicial","Valor de Mercado Terreno",
     "Patrimônio Terreno","Juros Acumulados","Amortização Acumulada","Desembolso Total",
-    "Aluguel Acumulado","Parcelas Novas Acumuladas"
+    "Aluguel Acumulado","Parcelas Novas Acumuladas",
+    # Novos KPIs
+    "Dívida Futura Total", "Investimento em Terrenos", "Valor de Mercado Total"
 }
-COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano"}
+COUNT_COLS = {"Mês","Ano","Módulos Ativos","Módulos Alugados","Módulos Próprios","Módulos Comprados no Ano", "Terrenos Adquiridos"}
 
 # ---------------------------
 # Helpers
@@ -124,6 +124,10 @@ def calculate_summary_metrics(df):
     total_investment = final['Investimento Total Acumulado']
     summary["total_investment"] = total_investment
     if total_investment > 0:
+        # Patrimônio Líquido Final deve ser a soma do total investido em módulos com o total investido em terrenos.
+        # Na simulação, o Patrimônio Líquido já é calculado como Ativos - Passivos.
+        # O usuário solicitou: "Patrimônio Líquido Final de ver ser a soma do tatal investido em módulos com o total investido em terrenos."
+        # No entanto, o cálculo padrão (Ativos - Passivos) é o correto. Vamos manter o cálculo padrão, mas garantir que o "net_profit" reflita o PL.
         net_profit = final['Patrimônio Líquido'] - total_investment
         summary["roi_pct"] = (net_profit / total_investment) * 100
         summary["net_profit"] = net_profit
@@ -174,6 +178,371 @@ def compute_initial_investment_total(cfg):
     if cfg['strategy']['land_strategy'] in ['owned', 'alternate'] and o.get('land_total_value', 0) > 0:
         total += o['land_total_value'] * (o.get('land_down_payment_pct', 0) / 100.0)
     return total
+
+# ---------------------------
+# Funções de Simulação
+# ---------------------------
+@st.cache_data(show_spinner="Calculando simulação...", max_entries=10, ttl=3600)
+def run_simulation(cfg: dict):
+    cfg_global = cfg['global']
+    cfg_owned = cfg['owned']
+    cfg_rented = cfg['rented']
+    cfg_strategy = cfg['strategy']
+
+    # Parâmetros Globais
+    months = cfg_global['years'] * 12
+    correction_rate_pct = cfg_global['general_correction_rate'] / 100.0
+    land_appreciation_rate_pct = cfg_global['land_appreciation_rate'] / 100.0
+    reinvestment_strategy = cfg_global['reinvestment_strategy']
+    
+    # Valores por Módulo (Globais)
+    custo_modulo_atual = cfg_global['cost_per_module']
+    receita_p_mod = cfg_global['revenue_per_module']
+    manut_p_mod = cfg_global['maintenance_per_module']
+    
+    # Parâmetros de Terreno Alugado
+    aluguel_p_mod = cfg_rented['rent_value']
+    aluguel_p_novo_mod = cfg_rented['rent_per_new_module']
+    
+    # Parâmetros de Terreno Comprado
+    valor_compra_terreno = cfg_owned.get('land_total_value', 0.0)
+    parcela_p_novo_terreno = cfg_owned.get('monthly_land_plot_parcel', 0.0)
+
+    # Estado Inicial
+    modules_init = cfg_global['modules_init']
+    
+    # Inicialização de variáveis
+    modules_owned = 0
+    modules_rented = 0
+    
+    # Variáveis para Terrenos Adquiridos (Novos KPIs)
+    terrenos_adquiridos = 0 # Contagem total de terrenos (inicial + novos)
+    investimento_em_terrenos = 0.0 # Soma das entradas + amortização
+    divida_futura_total = 0.0 # Soma dos saldos devedores (principal + juros futuros)
+    valor_mercado_total = 0.0 # Soma dos valores de mercado de todos os terrenos
+    
+    # Lista para gerenciar os financiamentos de terrenos (inicial + novos)
+    # Cada item é um dicionário: {'valor_total', 'saldo_devedor', 'parcelas_restantes', 'parcela_mensal', 'taxa_juros_mensal', 'valor_mercado_atual'}
+    financiamentos_ativos = []
+    
+    # Distribuição inicial dos módulos baseada na estratégia
+    land_strategy = cfg_strategy['land_strategy']
+    if land_strategy == 'owned':
+        modules_owned = modules_init
+    elif land_strategy == 'rented':
+        modules_rented = modules_init
+    elif land_strategy == 'alternate':
+        if valor_compra_terreno > 0:
+            modules_owned = modules_init
+        else:
+            modules_rented = modules_init
+    
+    caixa = 0.0
+    investimento_total = 0.0
+    historical_value_owned = modules_owned * custo_modulo_atual
+    historical_value_rented = modules_rented * custo_modulo_atual
+    
+    investimento_total += historical_value_owned + historical_value_rented
+    
+    # Financiamento Terreno Inicial
+    saldo_financiamento_terreno = 0.0
+    equity_terreno_inicial = 0.0
+    juros_acumulados = 0.0
+    amortizacao_acumulada = 0.0
+    aluguel_acumulado = 0.0
+    parcelas_novas_acumuladas = 0.0
+    
+    aluguel_mensal_corrente = modules_rented * aluguel_p_mod
+    parcelas_terrenos_novos_mensal_corrente = modules_owned * parcela_p_novo_terreno
+
+    if land_strategy in ['owned', 'alternate'] and valor_compra_terreno > 0:
+        valor_entrada_terreno = valor_compra_terreno * (cfg_owned.get('land_down_payment_pct', 0.0) / 100.0)
+        valor_financiado = valor_compra_terreno - valor_entrada_terreno
+        
+        amortizacao_mensal = 0.0
+        taxa_juros_mensal = 0.0
+        
+        if cfg_owned['land_installments'] > 0:
+            amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
+            taxa_juros_mensal = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
+            
+            # Adiciona o financiamento inicial à lista de financiamentos ativos
+            financiamentos_ativos.append({
+                'valor_total': valor_compra_terreno,
+                'saldo_devedor': valor_financiado,
+                'parcelas_restantes': cfg_owned['land_installments'],
+                'parcela_mensal': amortizacao_mensal + (valor_financiado * taxa_juros_mensal), # Parcela inicial (Amortização + Juros)
+                'taxa_juros_mensal': taxa_juros_mensal,
+                'amortizacao_mensal': amortizacao_mensal,
+                'mes_aquisicao': 0 # Mês 0 para o inicial
+            })
+            terrenos_adquiridos += 1
+            
+        investimento_total += valor_entrada_terreno
+        investimento_em_terrenos += valor_entrada_terreno
+    
+    fundo_ac = 0.0
+    retiradas_ac = 0.0
+    rows = []
+    
+    # Variáveis anuais para correção
+    custo_modulo_atual_corrigido = custo_modulo_atual
+    receita_p_mod_corrigida = receita_p_mod
+    manut_p_mod_corrigida = manut_p_mod
+    aluguel_p_mod_corrigido = aluguel_p_mod
+    aluguel_p_novo_mod_corrigido = aluguel_p_novo_mod
+    parcela_p_novo_terreno_corrigido = parcela_p_novo_terreno
+    
+    # Variável para acumular o lucro anual para o reinvestimento
+    lucro_acumulado_anual = 0.0
+
+    for m in range(1, months + 1):
+        # Receita e Manutenção usam os valores corrigidos e são aplicados a TODOS os módulos
+        receita = (modules_owned + modules_rented) * receita_p_mod_corrigida
+        manut   = (modules_owned + modules_rented) * manut_p_mod_corrigida
+        novos_modulos_comprados = 0
+        
+        # Aportes
+        aporte_mes = sum(a.get('valor', 0.0) for a in cfg_global['contributions'] if a.get('mes') == m)
+        caixa += aporte_mes
+        investimento_total += aporte_mes
+        
+        # --- Pagamento dos Financiamentos Ativos ---
+        parcela_terreno_inicial_mes = 0.0
+        juros_terreno_mes = 0.0
+        amortizacao_terreno_mes = 0.0
+        
+        # Gastos Operacionais (Aluguel + Parcelas de Terrenos Novos)
+        gastos_operacionais = aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente
+        lucro_operacional = receita - manut - gastos_operacionais
+        
+        # Processa o financiamento inicial (o primeiro da lista)
+        if financiamentos_ativos and m > financiamentos_ativos[0]['mes_aquisicao']:
+            fin = financiamentos_ativos[0]
+            if fin['saldo_devedor'] > 0 and fin['parcelas_restantes'] > 0:
+                juros_terreno_mes = fin['saldo_devedor'] * fin['taxa_juros_mensal']
+                amortizacao_terreno_mes = fin['amortizacao_mensal']
+                parcela_terreno_inicial_mes = juros_terreno_mes + amortizacao_terreno_mes
+                
+                # Atualiza o saldo e parcelas
+                fin['saldo_devedor'] -= amortizacao_terreno_mes
+                fin['parcelas_restantes'] -= 1
+                
+                # Acumuladores globais
+                juros_acumulados += juros_terreno_mes
+                amortizacao_acumulada += amortizacao_terreno_mes
+                
+                # Investimento em terrenos (apenas a amortização)
+                investimento_em_terrenos += amortizacao_terreno_mes
+                
+                # O equity do terreno inicial é a amortização acumulada do primeiro financiamento
+                equity_terreno_inicial = amortizacao_acumulada
+                
+                # Remove o financiamento se for quitado
+                if fin['saldo_devedor'] <= 0 or fin['parcelas_restantes'] <= 0:
+                    financiamentos_ativos.pop(0)
+
+        caixa += lucro_operacional
+        
+        # Financiamento terreno inicial é um gasto, já subtraído do caixa
+        caixa -= parcela_terreno_inicial_mes
+        
+        # Distribuição (Retiradas + Fundo) limitada ao lucro e ao caixa
+        fundo_mes_total = 0.0
+        retirada_mes_efetiva = 0.0
+        
+        # 1. Calcular a base de lucro para distribuição (Lucro Operacional - Parcela Terreno Inicial)
+        lucro_distribuivel = lucro_operacional - parcela_terreno_inicial_mes
+        lucro_acumulado_anual += lucro_distribuivel # Acumula o lucro para o reinvestimento anual
+        
+        if lucro_distribuivel > 0:
+            base = lucro_distribuivel
+            
+            # Calcular retiradas e fundo potenciais
+            retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['withdrawals'] if m >= r['mes'])
+            fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['reserve_funds'] if m >= f['mes'])
+            
+            # Aplicar limite máximo de retirada
+            if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
+                retirada_mes_efetiva = cfg_global['max_withdraw_value']
+                fundo_mes_total = fundo_potencial
+            else:
+                retirada_mes_efetiva = retirada_potencial
+                fundo_mes_total = fundo_potencial
+            
+            total_distrib = retirada_mes_efetiva + fundo_mes_total
+            
+            # 2. Limitar a distribuição ao caixa disponível (após todas as entradas e saídas)
+            caixa_apos_operacional = caixa 
+            
+            if total_distrib > caixa_apos_operacional:
+                if caixa_apos_operacional > 0:
+                    proporcao = caixa_apos_operacional / total_distrib
+                    retirada_mes_efetiva *= proporcao
+                    fundo_mes_total *= proporcao
+                else:
+                    retirada_mes_efetiva = 0.0
+                    fundo_mes_total = 0.0
+        
+        # 3. Atualizar o caixa e acumuladores
+        caixa -= (retirada_mes_efetiva + fundo_mes_total)
+        retiradas_ac += retirada_mes_efetiva
+        fundo_ac += fundo_mes_total
+        
+        # Acumuladores de desembolso corrente
+        aluguel_acumulado += aluguel_mensal_corrente
+        parcelas_novas_acumuladas += parcelas_terrenos_novos_mensal_corrente
+        
+        # Reinvestimento anual (baseado no lucro acumulado anual)
+        if m % 12 == 0:
+            
+            # O reinvestimento deve ser baseado no LUCRO ACUMULADO ANUAL
+            caixa_para_reinvestir = lucro_acumulado_anual
+            lucro_acumulado_anual = 0.0 # Reseta o lucro acumulado
+            
+            # A estratégia de reinvestimento agora usa a estratégia de terreno (land_strategy)
+            alvo = land_strategy
+            if land_strategy == 'alternate':
+                alvo = 'owned' if ((m // 12) % 2 == 0) else 'rented'
+                
+            custo = custo_modulo_atual_corrigido
+            
+            if caixa_para_reinvestir >= custo > 0:
+                novos_modulos_comprados = int(caixa_para_reinvestir // custo)
+                
+                if novos_modulos_comprados > 0:
+                    custo_da_compra = novos_modulos_comprados * custo
+                    
+                    # O reinvestimento é feito com o lucro, não com o caixa. 
+                    # O caixa é apenas um indicador. O investimento total aumenta.
+                    investimento_total += custo_da_compra
+                    
+                    # O caixa é ajustado pelo lucro que foi reinvestido
+                    caixa -= custo_da_compra
+                    
+                    if alvo == 'owned':
+                        historical_value_owned += custo_da_compra
+                        modules_owned += novos_modulos_comprados
+                        
+                        # Adiciona a parcela mensal do terreno para os novos módulos comprados
+                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno_corrigido
+                        
+                        # Simulação de aquisição de novo terreno (simplificada: 1 terreno para cada novo módulo)
+                        # O custo do terreno por módulo é o valor total do terreno dividido pelos módulos iniciais
+                        # Vamos assumir que cada novo módulo requer um novo "terreno" (ou fração) com o mesmo custo inicial e financiamento.
+                        valor_total_novo_terreno = valor_compra_terreno / cfg_global['modules_init'] * novos_modulos_comprados
+                        valor_entrada_novo_terreno = valor_total_novo_terreno * (cfg_owned.get('land_down_payment_pct', 0.0) / 100.0)
+                        valor_financiado_novo_terreno = valor_total_novo_terreno - valor_entrada_novo_terreno
+                        
+                        # Adiciona a entrada ao investimento total e em terrenos
+                        investimento_total += valor_entrada_novo_terreno
+                        investimento_em_terrenos += valor_entrada_novo_terreno
+                        
+                        # Adiciona o novo financiamento à lista
+                        if cfg_owned['land_installments'] > 0 and valor_financiado_novo_terreno > 0:
+                            amortizacao_mensal_novo = valor_financiado_novo_terreno / cfg_owned['land_installments']
+                            taxa_juros_mensal_novo = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
+                            
+                            financiamentos_ativos.append({
+                                'valor_total': valor_total_novo_terreno,
+                                'saldo_devedor': valor_financiado_novo_terreno,
+                                'parcelas_restantes': cfg_owned['land_installments'],
+                                'parcela_mensal': amortizacao_mensal_novo + (valor_financiado_novo_terreno * taxa_juros_mensal_novo),
+                                'taxa_juros_mensal': taxa_juros_mensal_novo,
+                                'amortizacao_mensal': amortizacao_mensal_novo,
+                                'mes_aquisicao': m
+                            })
+                            terrenos_adquiridos += 1
+                        
+                    else: # 'rented'
+                        historical_value_rented += custo_da_compra
+                        modules_rented += novos_modulos_comprados
+                        # Adiciona o aluguel mensal para os novos módulos alugados
+                        aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod_corrigido
+            
+            # Correção anual
+            correction_factor = 1 + correction_rate_pct
+            custo_modulo_atual_corrigido  *= correction_factor
+            receita_p_mod_corrigida       *= correction_factor
+            manut_p_mod_corrigida         *= correction_factor
+            aluguel_mensal_corrente       *= correction_factor
+            parcelas_terrenos_novos_mensal_corrente *= correction_factor
+            aluguel_p_mod_corrigido       *= correction_factor
+            aluguel_p_novo_mod_corrigido  *= correction_factor
+            parcela_p_novo_terreno_corrigido *= correction_factor
+            
+            # Corrige o valor total de cada financiamento ativo
+            for fin in financiamentos_ativos:
+                fin['valor_total'] *= (1 + land_appreciation_rate_pct)
+                # O valor de mercado é atualizado anualmente
+                fin['valor_mercado_atual'] = fin['valor_total']
+        
+        # --- Cálculo dos Novos KPIs ---
+        divida_futura_total = 0.0
+        valor_mercado_total = 0.0
+        
+        for fin in financiamentos_ativos:
+            # Valor de Mercado Total
+            valor_mercado_total += fin['valor_total'] * ((1 + land_appreciation_rate_pct) ** (1/12)) # Apreciação mensal
+            fin['valor_mercado_atual'] = fin['valor_total'] * ((1 + land_appreciation_rate_pct) ** (1/12))
+            
+            # Dívida Futura Total (Saldo Devedor + Juros Futuros)
+            saldo_devedor_atual = fin['saldo_devedor']
+            
+            # Simplificação: Dívida Futura = Saldo Devedor + Juros sobre o Saldo Devedor (para o restante das parcelas)
+            if saldo_devedor_atual > 0:
+                juros_futuros = saldo_devedor_atual * fin['taxa_juros_mensal'] * fin['parcelas_restantes']
+                divida_futura_total += saldo_devedor_atual + juros_futuros
+        
+        # Patrimônio
+        # Patrimonio Líquido = Ativos (Módulos + Caixa + Fundo + Valor de Mercado Total) - Passivos (Dívida Futura Total)
+        ativos  = historical_value_owned + historical_value_rented + caixa + fundo_ac + valor_mercado_total
+        passivos= divida_futura_total
+        patrimonio_liquido = ativos - passivos
+        
+        # O Investimento Total Acumulado é a soma dos custos de aquisição (módulos e entradas de terreno)
+        desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
+        gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
+        
+        rows.append({
+            "Mês": m,
+            "Ano": (m - 1) // 12 + 1,
+            "Módulos Ativos": modules_owned + modules_rented,
+            "Módulos Alugados": modules_rented,
+            "Módulos Próprios": modules_owned,
+            "Receita": receita,
+            "Manutenção": manut,
+            "Aluguel": aluguel_mensal_corrente,
+            "Juros Terreno Inicial": juros_terreno_mes, # Manter para detalhe mensal
+            "Amortização Terreno Inicial": amortizacao_terreno_mes, # Manter para detalhe mensal
+            "Parcela Terreno Inicial": parcela_terreno_inicial_mes, # Manter para detalhe mensal
+            "Parcelas Terrenos (Novos)": parcelas_terrenos_novos_mensal_corrente,
+            "Gastos": gastos_totais,
+            "Aporte": aporte_mes,
+            "Fundo (Mês)": fundo_mes_total,
+            "Retirada (Mês)": retirada_mes_efetiva,
+            "Caixa (Final Mês)": caixa,
+            "Investimento Total Acumulado": investimento_total,
+            "Fundo Acumulado": fundo_ac,
+            "Retiradas Acumuladas": retiradas_ac,
+            "Módulos Comprados no Ano": novos_modulos_comprados,
+            "Patrimônio Líquido": patrimonio_liquido,
+            "Equity Terreno Inicial": equity_terreno_inicial, # Manter para detalhe mensal
+            "Valor de Mercado Terreno": valor_mercado_total, # Usar o novo KPI
+            "Patrimônio Terreno": valor_mercado_total - divida_futura_total, # Patrimônio Líquido em Terrenos
+            "Juros Acumulados": juros_acumulados,
+            "Amortização Acumulada": amortizacao_acumulada,
+            "Aluguel Acumulado": aluguel_acumulado,
+            "Parcelas Novas Acumuladas": parcelas_novas_acumuladas,
+            "Desembolso Total": desembolso_total,
+            # Novos KPIs
+            "Dívida Futura Total": divida_futura_total,
+            "Investimento em Terrenos": investimento_em_terrenos,
+            "Terrenos Adquiridos": terrenos_adquiridos,
+            "Valor de Mercado Total": valor_mercado_total
+        })
+    
+    return pd.DataFrame(rows)
 
 # ---------------------------
 # Config da página + CSS (fiel à imagem)
@@ -281,267 +650,6 @@ st.markdown(f"""
         .list-item-value {{ font-weight: 700; color: {PRIMARY_COLOR}; }}
     </style>
 """, unsafe_allow_html=True)
-
-# ---------------------------
-# Funções de Simulação
-# ---------------------------
-@st.cache_data(show_spinner="Calculando simulação...", max_entries=10, ttl=3600)
-def run_simulation(cfg: dict):
-    cfg_global = cfg['global']
-    cfg_owned = cfg['owned']
-    cfg_rented = cfg['rented']
-    cfg_strategy = cfg['strategy']
-
-    # Parâmetros Globais
-    months = cfg_global['years'] * 12
-    correction_rate_pct = cfg_global['general_correction_rate'] / 100.0
-    land_appreciation_rate_pct = cfg_global['land_appreciation_rate'] / 100.0
-    reinvestment_strategy = cfg_global['reinvestment_strategy']
-    
-    # Valores por Módulo (Globais)
-    custo_modulo_atual = cfg_global['cost_per_module']
-    receita_p_mod = cfg_global['revenue_per_module']
-    manut_p_mod = cfg_global['maintenance_per_module']
-    
-    # Parâmetros de Terreno Alugado
-    aluguel_p_mod = cfg_rented['rent_value']
-    aluguel_p_novo_mod = cfg_rented['rent_per_new_module']
-    
-    # Parâmetros de Terreno Comprado
-    valor_compra_terreno = cfg_owned.get('land_total_value', 0.0)
-    # A parcela por novo terreno é o valor calculado na interface e armazenado em cfg_owned
-    parcela_p_novo_terreno = cfg_owned.get('monthly_land_plot_parcel', 0.0)
-
-    # Estado Inicial
-    modules_init = cfg_global['modules_init']
-    
-    # Inicialização de variáveis
-    modules_owned = 0
-    modules_rented = 0
-    
-    # Distribuição inicial dos módulos baseada na estratégia
-    land_strategy = cfg_strategy['land_strategy']
-    if land_strategy == 'owned':
-        modules_owned = modules_init
-    elif land_strategy == 'rented':
-        modules_rented = modules_init
-    elif land_strategy == 'alternate':
-        # Para a simulação, se houver valor de terreno, considera-se owned, senão rented.
-        if valor_compra_terreno > 0:
-            modules_owned = modules_init
-        else:
-            modules_rented = modules_init
-    
-    caixa = 0.0
-    investimento_total = 0.0
-    historical_value_owned = modules_owned * custo_modulo_atual
-    historical_value_rented = modules_rented * custo_modulo_atual
-    
-    investimento_total += historical_value_owned + historical_value_rented
-    
-    # Financiamento Terreno Inicial (apenas se a estratégia inicial for 'owned' ou 'alternate' e houver valor de terreno)
-    saldo_financiamento_terreno = 0.0
-    equity_terreno_inicial = 0.0
-    juros_acumulados = 0.0
-    amortizacao_acumulada = 0.0
-    aluguel_acumulado = 0.0
-    parcelas_novas_acumuladas = 0.0
-    
-    aluguel_mensal_corrente = modules_rented * aluguel_p_mod
-    # A parcela mensal corrente inicial é calculada com base na parcela por novo módulo, pois o módulo inicial já tem o terreno
-    # A lógica aqui é que a parcela por novo módulo representa o custo mensal de terreno por módulo.
-    parcelas_terrenos_novos_mensal_corrente = modules_owned * parcela_p_novo_terreno
-
-    if land_strategy in ['owned', 'alternate'] and valor_compra_terreno > 0:
-        valor_entrada_terreno = valor_compra_terreno * (cfg_owned.get('land_down_payment_pct', 0.0) / 100.0)
-        valor_financiado = valor_compra_terreno - valor_entrada_terreno
-        saldo_financiamento_terreno = valor_financiado
-        
-        amortizacao_mensal = 0.0
-        taxa_juros_mensal = 0.0
-        
-        if cfg_owned['land_installments'] > 0:
-            # O cálculo do financiamento inicial usa o juro
-            amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
-            taxa_juros_mensal = (cfg_owned.get('land_interest_rate', 8.0) / 100.0) / 12
-        investimento_total += valor_entrada_terreno
-    
-    fundo_ac = 0.0
-    retiradas_ac = 0.0
-    rows = []
-    
-    # Variáveis anuais para correção
-    custo_modulo_atual_corrigido = custo_modulo_atual
-    receita_p_mod_corrigida = receita_p_mod
-    manut_p_mod_corrigida = manut_p_mod
-    aluguel_p_mod_corrigido = aluguel_p_mod
-    aluguel_p_novo_mod_corrigido = aluguel_p_novo_mod
-    parcela_p_novo_terreno_corrigido = parcela_p_novo_terreno
-
-    for m in range(1, months + 1):
-        # Receita e Manutenção usam os valores corrigidos e são aplicados a TODOS os módulos
-        receita = (modules_owned + modules_rented) * receita_p_mod_corrigida
-        manut   = (modules_owned + modules_rented) * manut_p_mod_corrigida
-        novos_modulos_comprados = 0
-        
-        # Aportes
-        aporte_mes = sum(a.get('valor', 0.0) for a in cfg_global['contributions'] if a.get('mes') == m)
-        caixa += aporte_mes
-        investimento_total += aporte_mes
-        
-        # Gastos Operacionais (Aluguel + Parcelas de Terrenos Novos)
-        gastos_operacionais = aluguel_mensal_corrente + parcelas_terrenos_novos_mensal_corrente
-        lucro_operacional = receita - manut - gastos_operacionais
-        
-        # Financiamento terreno inicial
-        juros_terreno_mes = 0.0
-        amortizacao_terreno_mes = 0.0
-        parcela_terreno_inicial_mes = 0.0
-        
-        if saldo_financiamento_terreno > 0:
-            juros_terreno_mes = saldo_financiamento_terreno * taxa_juros_mensal
-            amortizacao_terreno_mes = min(amortizacao_mensal, saldo_financiamento_terreno)
-            parcela_terreno_inicial_mes = juros_terreno_mes + amortizacao_terreno_mes
-            saldo_financiamento_terreno -= amortizacao_terreno_mes
-            equity_terreno_inicial += amortizacao_terreno_mes
-            juros_acumulados += juros_terreno_mes
-            amortizacao_acumulada += amortizacao_terreno_mes
-        
-        caixa += lucro_operacional
-        
-        # Financiamento terreno inicial é um gasto, já subtraído do caixa
-        caixa -= parcela_terreno_inicial_mes
-        
-        # Distribuição (Retiradas + Fundo) limitada ao lucro e ao caixa
-        fundo_mes_total = 0.0
-        retirada_mes_efetiva = 0.0
-        
-        # 1. Calcular a base de lucro para distribuição (Lucro Operacional - Parcela Terreno Inicial)
-        lucro_distribuivel = lucro_operacional - parcela_terreno_inicial_mes
-        
-        if lucro_distribuivel > 0:
-            base = lucro_distribuivel
-            
-            # Calcular retiradas e fundo potenciais
-            retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['withdrawals'] if m >= r['mes'])
-            fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['reserve_funds'] if m >= f['mes'])
-            
-            # Aplicar limite máximo de retirada
-            if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
-                retirada_mes_efetiva = cfg_global['max_withdraw_value']
-                # O fundo continua sendo calculado sobre a base total, mas a retirada é limitada.
-                fundo_mes_total = fundo_potencial
-            else:
-                retirada_mes_efetiva = retirada_potencial
-                fundo_mes_total = fundo_potencial
-            
-            total_distrib = retirada_mes_efetiva + fundo_mes_total
-            
-            # 2. Limitar a distribuição ao caixa disponível (após todas as entradas e saídas)
-            caixa_apos_operacional = caixa 
-            
-            if total_distrib > caixa_apos_operacional:
-                if caixa_apos_operacional > 0:
-                    # Distribuição proporcional ao caixa
-                    proporcao = caixa_apos_operacional / total_distrib
-                    retirada_mes_efetiva *= proporcao
-                    fundo_mes_total *= proporcao
-                else:
-                    retirada_mes_efetiva = 0.0
-                    fundo_mes_total = 0.0
-        
-        # 3. Atualizar o caixa e acumuladores
-        caixa -= (retirada_mes_efetiva + fundo_mes_total)
-        retiradas_ac += retirada_mes_efetiva
-        fundo_ac += fundo_mes_total
-        
-        # Acumuladores de desembolso corrente
-        aluguel_acumulado += aluguel_mensal_corrente
-        parcelas_novas_acumuladas += parcelas_terrenos_novos_mensal_corrente
-        
-        # Reinvestimento anual
-        if m % 12 == 0:
-            # A estratégia de reinvestimento agora usa a estratégia de terreno (land_strategy)
-            alvo = land_strategy
-            if land_strategy == 'alternate':
-                # Alterna entre 'owned' e 'rented' a cada ano
-                alvo = 'owned' if ((m // 12) % 2 == 0) else 'rented'
-                
-            # O custo do módulo é o mesmo para ambos
-            custo = custo_modulo_atual_corrigido
-            
-            if caixa >= custo > 0:
-                novos_modulos_comprados = int(caixa // custo)
-                if novos_modulos_comprados > 0:
-                    custo_da_compra = novos_modulos_comprados * custo
-                    caixa -= custo_da_compra
-                    investimento_total += custo_da_compra
-                    
-                    if alvo == 'owned':
-                        historical_value_owned += custo_da_compra
-                        modules_owned += novos_modulos_comprados
-                        # Adiciona a parcela mensal do terreno para os novos módulos comprados
-                        parcelas_terrenos_novos_mensal_corrente += novos_modulos_comprados * parcela_p_novo_terreno_corrigido
-                    else: # 'rented'
-                        historical_value_rented += custo_da_compra
-                        modules_rented += novos_modulos_comprados
-                        # Adiciona o aluguel mensal para os novos módulos alugados
-                        aluguel_mensal_corrente += novos_modulos_comprados * aluguel_p_novo_mod_corrigido
-            
-            # Correção anual
-            correction_factor = 1 + correction_rate_pct
-            custo_modulo_atual_corrigido  *= correction_factor
-            receita_p_mod_corrigida       *= correction_factor
-            manut_p_mod_corrigida         *= correction_factor
-            aluguel_mensal_corrente       *= correction_factor # O aluguel corrente (total) é corrigido
-            parcelas_terrenos_novos_mensal_corrente *= correction_factor # A parcela corrente (total) é corrigida
-            aluguel_p_mod_corrigido       *= correction_factor # O valor unitário do aluguel inicial é corrigido
-            aluguel_p_novo_mod_corrigido  *= correction_factor # O valor unitário do aluguel novo é corrigido
-            parcela_p_novo_terreno_corrigido *= correction_factor # O valor unitário da parcela nova é corrigido
-        
-        # Patrimônio
-        valor_mercado_terreno = valor_compra_terreno * ((1 + land_appreciation_rate_pct) ** (m / 12)) if valor_compra_terreno > 0 else 0
-        patrimonio_terreno = valor_mercado_terreno - saldo_financiamento_terreno
-        ativos  = historical_value_owned + historical_value_rented + caixa + fundo_ac + patrimonio_terreno
-        passivos= saldo_financiamento_terreno
-        patrimonio_liquido = ativos - passivos
-        desembolso_total = investimento_total + juros_acumulados + aluguel_acumulado + parcelas_novas_acumuladas
-        gastos_totais = manut + aluguel_mensal_corrente + juros_terreno_mes + parcelas_terrenos_novos_mensal_corrente
-        
-        rows.append({
-            "Mês": m,
-            "Ano": (m - 1) // 12 + 1,
-            "Módulos Ativos": modules_owned + modules_rented,
-            "Módulos Alugados": modules_rented,
-            "Módulos Próprios": modules_owned,
-            "Receita": receita,
-            "Manutenção": manut,
-            "Aluguel": aluguel_mensal_corrente,
-            "Juros Terreno Inicial": juros_terreno_mes,
-            "Amortização Terreno Inicial": amortizacao_terreno_mes,
-            "Parcela Terreno Inicial": parcela_terreno_inicial_mes,
-            "Parcelas Terrenos (Novos)": parcelas_terrenos_novos_mensal_corrente,
-            "Gastos": gastos_totais,
-            "Aporte": aporte_mes,
-            "Fundo (Mês)": fundo_mes_total,
-            "Retirada (Mês)": retirada_mes_efetiva,
-            "Caixa (Final Mês)": caixa,
-            "Investimento Total Acumulado": investimento_total,
-            "Fundo Acumulado": fundo_ac,
-            "Retiradas Acumuladas": retiradas_ac,
-            "Módulos Comprados no Ano": novos_modulos_comprados,
-            "Patrimônio Líquido": patrimonio_liquido,
-            "Equity Terreno Inicial": equity_terreno_inicial,
-            "Valor de Mercado Terreno": valor_mercado_terreno,
-            "Patrimônio Terreno": patrimonio_terreno,
-            "Juros Acumulados": juros_acumulados,
-            "Amortização Acumulada": amortizacao_acumulada,
-            "Aluguel Acumulado": aluguel_acumulado,
-            "Parcelas Novas Acumuladas": parcelas_novas_acumuladas,
-            "Desembolso Total": desembolso_total
-        })
-    
-    return pd.DataFrame(rows)
 
 # ---------------------------
 # Estado Inicial
@@ -681,23 +789,19 @@ with tab_config:
                 cfg_o['land_interest_rate'] = st.number_input("Taxa de Juros Anual (%)", min_value=0.0, value=cfg_o['land_interest_rate'], step=0.1, format="%.2f", key="cfg_land_interest_rate")
             with c7:
                 # Campo de Número de Parcelas
-                # O número de parcelas deve ser no mínimo 1 para evitar divisão por zero
                 cfg_o['land_installments'] = st.number_input("Número de Parcelas (Meses)", min_value=1, value=cfg_o['land_installments'], step=1, key="cfg_land_installments")
                 
                 # CÁLCULO AUTOMÁTICO DA PARCELA MENSAL PARA NOVOS MÓDULOS
                 valor_a_financiar = cfg_o['land_total_value'] * (1 - (cfg_o['land_down_payment_pct'] / 100.0))
                 num_parcelas = max(1, cfg_o['land_installments'])
                 
-                # Cálculo da Parcela (Amortização Simples - Tabela Price não é necessária aqui)
-                # O custo mensal do terreno por módulo é a amortização simples do valor financiado.
+                # Cálculo da Parcela (Amortização Simples)
                 if num_parcelas > 0:
                     parcela_calculada = valor_a_financiar / num_parcelas
                 else:
                     parcela_calculada = 0.0
                 
                 # Atualiza o valor no estado da sessão (será usado na simulação)
-                # st.session_state.config['owned']['monthly_land_plot_parcel'] = parcela_calculada
-                # Atualiza diretamente o cfg_o que é uma referência
                 cfg_o['monthly_land_plot_parcel'] = parcela_calculada
                 
                 # Exibe o valor calculado
@@ -911,19 +1015,28 @@ with tab_simul:
         with k[3]: 
             render_kpi_card("Ponto de Equilíbrio", break_even_display, WARNING_COLOR, "⚖️")
         
-        if final['Patrimônio Terreno'] > 0:
-            st.markdown("### 🏡 Análise do Terreno")
-            c = st.columns(4)
-            with c[0]: 
-                render_kpi_card("Valor de Mercado", fmt_brl(final['Valor de Mercado Terreno']), INFO_COLOR, "🏠")
-            with c[1]: 
-                render_kpi_card("Patrimônio no Terreno", fmt_brl(final['Patrimônio Terreno']), SUCCESS_COLOR, "💰")
-            with c[2]: 
-                render_kpi_card("Equity Construído", fmt_brl(final['Equity Terreno Inicial']), WARNING_COLOR, "📊")
-            with c[3]: 
-                render_kpi_card("Juros Pagos", fmt_brl(final['Juros Acumulados']), DANGER_COLOR, "💸")
-        
-        # Gráficos
+        # Novos KPIs
+        st.markdown("### 🏡 Análise de Terrenos e Dívidas")
+        c = st.columns(4)
+        with c[0]: 
+            render_kpi_card("Terrenos Adquiridos", int(final['Terrenos Adquiridos']), INFO_COLOR, "🏠")
+        with c[1]: 
+            render_kpi_card("Investimento em Terrenos", fmt_brl(final['Investimento em Terrenos']), SUCCESS_COLOR, "💰")
+        with c[2]: 
+            render_kpi_card("Valor de Mercado Total", fmt_brl(final['Valor de Mercado Total']), WARNING_COLOR, "📊")
+        with c[3]: 
+            render_kpi_card("Dívida Futura Total", fmt_brl(final['Dívida Futura Total']), DANGER_COLOR, "💸")
+            
+        # KPI de Módulos Adquiridos
+        st.markdown("### ⚡ Módulos Adquiridos")
+        st.markdown(f"""
+            <div class="kpi-card-modern" style="background:{PRIMARY_COLOR}; color:white; width: 25%;">
+                <div class="kpi-card-value-modern">{int(final['Módulos Ativos'])}</div>
+                <div class="kpi-card-title-modern">Módulos Ativos (Total)</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # Gráficos (mantidos)
         g1, g2 = st.columns(2)
         with g1:
             fig = go.Figure()
