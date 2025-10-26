@@ -713,10 +713,8 @@ def get_default_config():
 st.markdown("<div class='header'><div class='header-title'>Simulador Financeiro de Investimentos</div><div class='header-sub'>Análise de Viabilidade de Projetos de Geração de Energia</div></div>", unsafe_allow_html=True)
 
 # Barra de Investimento Inicial no topo (conforme solicitado)
-if not st.session_state.simulation_df.empty:
-    total_invest = st.session_state.simulation_df.iloc[-1]['Investimento Total Acumulado']
-else:
-    total_invest = compute_initial_investment_total(st.session_state.config)
+# Sempre exibe o investimento inicial, nunca o acumulado
+total_invest = compute_initial_investment_total(st.session_state.config)
 
 st.markdown(f"""
     <div class="invest-strip">
@@ -944,7 +942,12 @@ with tab_config:
         if st.session_state.simulation_df.empty:
             st.warning("Execute a simulação primeiro.")
         else:
-            strategy_name = st.text_input("Nome da Estratégia para Comparação", value=f"Estratégia {len(st.session_state.comparison_df.get('Estratégia', []).unique()) + 1}", key="comparison_name")
+            # Calcula o número da estratégia
+            if st.session_state.comparison_df.empty:
+                strategy_num = 1
+            else:
+                strategy_num = len(st.session_state.comparison_df['Estratégia'].unique()) + 1
+            strategy_name = st.text_input("Nome da Estratégia para Comparação", value=f"Estratégia {strategy_num}", key="comparison_name")
             
             # Adiciona a coluna de estratégia
             df_comp = st.session_state.simulation_df.copy()
