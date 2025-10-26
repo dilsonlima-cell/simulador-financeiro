@@ -1044,7 +1044,8 @@ with tab_simul:
         with k[1]: 
             render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
         with k[2]: 
-            render_kpi_card("Riqueza Gerada", fmt_brl(final['Riqueza Gerada']), "#9333EA", "💎")
+            riqueza_gerada = final.get('Riqueza Gerada', 0)
+            render_kpi_card("Riqueza Gerada", fmt_brl(riqueza_gerada), "#9333EA", "💎")
         with k[3]: 
             render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
             
