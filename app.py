@@ -247,6 +247,9 @@ def run_simulation(cfg: dict):
     
     investimento_total += historical_value_owned + historical_value_rented
     
+    # Armazena o investimento inicial para cálculo da Riqueza Gerada
+    investimento_inicial = investimento_total
+    
     # Financiamento Terreno Inicial (apenas se a estratégia inicial for 'owned' ou 'alternate' e houver valor de terreno)
     juros_acumulados = 0.0
     amortizacao_acumulada = 0.0
@@ -532,9 +535,15 @@ def run_simulation(cfg: dict):
         # A quantidade de terrenos é igual à quantidade de módulos próprios
         terrenos_adquiridos = modules_owned
         
-        # Total de Riqueza Gerada = Patrimônio Líquido - Investimento Total Acumulado
-        # Representa o ganho líquido gerado pelo investimento
-        riqueza_gerada = patrimonio_liquido - investimento_total
+        # Riqueza Geral Acumulada = Patrimônio Líquido Final (o que você ainda tem)
+        riqueza_geral_acumulada = patrimonio_liquido
+        
+        # Riqueza Total Gerada = Patrimônio Líquido Final + Retiradas Acumuladas + Fundo de Reserva Acumulado
+        # Representa toda a riqueza criada pelo investimento (o que você tem + o que já sacou + o que guardou)
+        riqueza_total_gerada = patrimonio_liquido + retiradas_ac + fundo_ac
+        
+        # Riqueza Gerada (ganho líquido em relação ao investimento inicial)
+        riqueza_gerada = riqueza_total_gerada - investimento_inicial
         
         rows.append({
             "Mês": m,
@@ -572,6 +581,8 @@ def run_simulation(cfg: dict):
             "Investimento em Terrenos": investimento_em_terrenos,
             "Terrenos Adquiridos": terrenos_adquiridos,
             "Valor de Mercado Total": valor_mercado_total,
+            "Riqueza Geral Acumulada": riqueza_geral_acumulada,
+            "Riqueza Total Gerada": riqueza_total_gerada,
             "Riqueza Gerada": riqueza_gerada
         })
     
@@ -1037,22 +1048,29 @@ with tab_simul:
         final = df.iloc[-1]
         summary = calculate_summary_metrics(df)
         
-        st.markdown("### 📊 Indicadores Principais")
-        k = st.columns(5)
+        st.markdown("### 💎 Indicadores de Riqueza")
+        k = st.columns(3)
         with k[0]: 
-            render_kpi_card("Patrimônio Líquido Final", fmt_brl(final['Patrimônio Líquido']), SUCCESS_COLOR, "💰")
+            riqueza_geral = final.get('Riqueza Geral Acumulada', 0)
+            render_kpi_card("Riqueza Geral Acumulada", fmt_brl(riqueza_geral), SUCCESS_COLOR, "💰")
         with k[1]: 
-            render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
+            riqueza_total = final.get('Riqueza Total Gerada', 0)
+            render_kpi_card("Riqueza Total Gerada", fmt_brl(riqueza_total), "#9333EA", "💎")
         with k[2]: 
             riqueza_gerada = final.get('Riqueza Gerada', 0)
-            render_kpi_card("Riqueza Gerada", fmt_brl(riqueza_gerada), "#9333EA", "💎")
-        with k[3]: 
-            render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📈")
-            
-        # Tratamento para Ponto de Equilíbrio
+            render_kpi_card("Ganho Liquido", fmt_brl(riqueza_gerada), "#10B981", "📈")
+        
+        st.markdown("### 📊 Indicadores de Investimento")
+        k2 = st.columns(4)
+        with k2[0]: 
+            render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
+        with k2[1]: 
+            render_kpi_card("ROI Total", f"{summary['roi_pct']:.1f}%", INFO_COLOR, "📊")
         break_even_display = summary['break_even_month'] if summary['break_even_month'] != 'N/A' else 'N/A'
-        with k[4]: 
-            render_kpi_card("Ponto de Equilíbrio", break_even_display, WARNING_COLOR, "⚖️")
+        with k2[2]: 
+            render_kpi_card("Ponto de Equilibrio", break_even_display, WARNING_COLOR, "⚖️")
+        with k2[3]:
+            render_kpi_card("Modulos Ativos", int(final['Módulos Ativos']), PRIMARY_COLOR, "⚡")
         
         # Novos KPIs
         st.markdown("### 🏡 Análise de Terrenos e Dívidas")
