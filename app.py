@@ -368,7 +368,7 @@ def run_simulation(cfg: dict):
             
             # Calcular retiradas e fundo potenciais
             retirada_potencial = sum(base * (r['percentual'] / 100.0) for r in cfg_global['withdrawals'] if m >= r['mes'])
-            fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['reserve_funds'] if m >= r['mes'])
+            fundo_potencial    = sum(base * (f['percentual'] / 100.0) for f in cfg_global['reserve_funds'] if m >= f['mes'])
             
             # Aplicar limite máximo de retirada
             if cfg_global['max_withdraw_value'] > 0 and retirada_potencial > cfg_global['max_withdraw_value']:
@@ -393,18 +393,26 @@ def run_simulation(cfg: dict):
                     fundo_mes_total = 0.0
         
         # 3. Atualizar o caixa e acumuladores
-        caixa -= (retirada_mes_efetiva + fundo_mes_total)
-        retiradas_ac += retirada_mes_efetiva
-        fundo_ac += fundo_mes_total
+        # Verifica se há caixa suficiente antes de descontar retiradas e fundo
+        total_a_descontar = retirada_mes_efetiva + fundo_mes_total
+        if caixa >= total_a_descontar:
+            caixa -= total_a_descontar
+            retiradas_ac += retirada_mes_efetiva
+            fundo_ac += fundo_mes_total
+        else:
+            # Se não há caixa suficiente, não desconta nada
+            retirada_mes_efetiva = 0.0
+            fundo_mes_total = 0.0
         
         # Acumuladores de desembolso corrente
         aluguel_acumulado += aluguel_mensal_corrente
         parcelas_novas_acumuladas += parcelas_terrenos_novos_mensal_corrente
         
-        # Reinvestimento anual (baseado no lucro acumulado anual)
+        # Reinvestimento anual (baseado no caixa disponível e lucro acumulado anual)
         if m % 12 == 0:
             
-            caixa_para_reinvestir = lucro_acumulado_anual
+            # Usa o caixa disponível para reinvestimento, mas apenas se for positivo
+            caixa_para_reinvestir = max(0, caixa) if lucro_acumulado_anual > 0 else 0
             lucro_acumulado_anual = 0.0 # Reseta o lucro acumulado
             
             alvo = land_strategy
