@@ -171,10 +171,12 @@ def compute_cache_key(cfg: dict) -> str:
 
 def compute_initial_investment_total(cfg):
     g = cfg['global']; o = cfg['owned']
-    # Investimento inicial = (Módulos iniciais * Custo por módulo) + Entrada do terreno (se comprado)
+    # Investimento inicial = (Modulos iniciais * Custo por modulo) + Entrada do terreno para TODOS os modulos iniciais (se comprado)
     total = g['modules_init'] * g['cost_per_module']
     if cfg['strategy']['land_strategy'] in ['owned', 'alternate'] and o.get('land_total_value', 0) > 0:
-        total += o['land_total_value'] * (o.get('land_down_payment_pct', 0) / 100.0)
+        # Valor total do terreno para TODOS os modulos iniciais
+        valor_total_terreno = o['land_total_value'] * g['modules_init']
+        total += valor_total_terreno * (o.get('land_down_payment_pct', 0) / 100.0)
     return total
 
 # ---------------------------
@@ -257,27 +259,28 @@ def run_simulation(cfg: dict):
     parcelas_terrenos_novos_mensal_corrente = modules_owned * parcela_p_novo_terreno
 
     if land_strategy in ['owned', 'alternate'] and valor_compra_terreno > 0:
-        valor_entrada_terreno = valor_compra_terreno * (cfg_owned.get('land_down_payment_pct', 0.0) / 100.0)
-        valor_financiado = valor_compra_terreno - valor_entrada_terreno
+        # Valor total do terreno para TODOS os módulos iniciais
+        valor_total_terreno_inicial = valor_compra_terreno * modules_init
+        valor_entrada_terreno = valor_total_terreno_inicial * (cfg_owned.get('land_down_payment_pct', 0.0) / 100.0)
+        valor_financiado = valor_total_terreno_inicial - valor_entrada_terreno
         
         amortizacao_mensal = 0.0
         
         if cfg_owned['land_installments'] > 0:
             amortizacao_mensal = valor_financiado / cfg_owned['land_installments']
             
-            # Adiciona o financiamento inicial à lista de financiamentos ativos
-            # Assumimos que o módulo inicial tem 1 terreno
-            for _ in range(modules_init):
-                financiamentos_ativos.append({
-                    'valor_total': valor_compra_terreno,
-                    'saldo_devedor': valor_financiado,
-                    'parcelas_restantes': cfg_owned['land_installments'],
-                    'parcela_mensal': amortizacao_mensal + (valor_financiado * taxa_juros_mensal), # Parcela inicial (Amortização + Juros)
-                    'taxa_juros_mensal': taxa_juros_mensal,
-                    'amortizacao_mensal': amortizacao_mensal,
-                    'mes_aquisicao': 0, # Mês 0 para o inicial
-                    'valor_original_terreno': valor_compra_terreno
-                })
+            # Adiciona UM ÚNICO financiamento para todos os módulos iniciais
+            financiamentos_ativos.append({
+                'valor_total': valor_total_terreno_inicial,
+                'saldo_devedor': valor_financiado,
+                'parcelas_restantes': cfg_owned['land_installments'],
+                'parcela_mensal': amortizacao_mensal + (valor_financiado * taxa_juros_mensal), # Parcela inicial (Amortização + Juros)
+                'taxa_juros_mensal': taxa_juros_mensal,
+                'amortizacao_mensal': amortizacao_mensal,
+                'mes_aquisicao': 0, # Mês 0 para o inicial
+                'valor_original_terreno': valor_total_terreno_inicial,
+                'quantidade_modulos': modules_init  # Rastreia quantos módulos estão associados a este financiamento
+            })
             
         investimento_total += valor_entrada_terreno
         investimento_em_terrenos += valor_entrada_terreno
