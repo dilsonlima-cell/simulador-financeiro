@@ -1061,7 +1061,7 @@ with tab_simul:
             render_kpi_card("Ganho Liquido", fmt_brl(riqueza_gerada), "#10B981", "📈")
         
         st.markdown("### 📊 Indicadores de Investimento")
-        k2 = st.columns(4)
+        k2 = st.columns(5)
         with k2[0]: 
             render_kpi_card("Investimento Total", fmt_brl(final['Investimento Total Acumulado']), SECONDARY_COLOR, "💼")
         with k2[1]: 
@@ -1071,6 +1071,9 @@ with tab_simul:
             render_kpi_card("Ponto de Equilibrio", break_even_display, WARNING_COLOR, "⚖️")
         with k2[3]:
             render_kpi_card("Modulos Ativos", int(final['Módulos Ativos']), PRIMARY_COLOR, "⚡")
+        with k2[4]:
+            custo_mensal_final = final.get('Gastos', 0)
+            render_kpi_card("Custo Mensal Final", fmt_brl(custo_mensal_final), DANGER_COLOR, "💸")
         
         # Novos KPIs
         st.markdown("### 🏡 Análise de Terrenos e Dívidas")
